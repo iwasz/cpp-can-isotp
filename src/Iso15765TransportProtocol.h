@@ -224,21 +224,7 @@ public:
         /// Messages composed from CAN frames.
         struct TransportMessage {
 
-                //                TransportMessage &operator= (TransportMessage &&t)
-                //                {
-                //                        this->address = t.address;
-                //                        this->data = std::move (t.data);
-                //                        this->prev return *this;
-                //                }
-
                 int append (CanMessageWrapperType const &frame, size_t offset, size_t len);
-
-                // TODO ifdef debug or sth
-                std::ostream &operator<< (std::ostream &o) const
-                {
-                        o << "TransportMessage addr = " << address << ", data = " << data;
-                        return o;
-                }
 
                 uint32_t address = 0; /// Address Information M_AI
                 Buffer data;          /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
@@ -405,7 +391,7 @@ bool TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandl
                 //                }
                 //                else {
                 //                        callback (std::move (message));
-                callback (message);
+                callback (message.data);
                 //                }
         } break;
 
@@ -487,7 +473,7 @@ bool TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandl
                         //                        }
                         //                        else {
                         // callback (std::move (*isoMessage));
-                        callback (*isoMessage);
+                        callback (isoMessage->data);
                         //                        }
                         stack.removeMessage (isoMessage);
                 }
@@ -820,3 +806,14 @@ int TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandle
                 data[outputIndex] = frame.get (inputIndex);
         }
 }
+
+/*****************************************************************************/
+
+//template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
+//std::ostream &
+//operator<< (std::ostream &o,
+//            typename TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessage const &tm)
+//{
+//        o << "TransportMessage addr = " << tm.address << ", data = " << tm.data;
+//        return o;
+//}
