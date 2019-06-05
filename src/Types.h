@@ -8,7 +8,7 @@
 
 #ifndef UTILS_TYPES_H
 #define UTILS_TYPES_H
-
+#if 0
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -41,5 +41,5 @@ inline std::ostream &operator<< (std::ostream &o, Buffer const &b)
 }
 
 std::string to_ascii (const uint8_t *bytes, uint32_t length);
-
+#endif
 #endif // TYPES_H

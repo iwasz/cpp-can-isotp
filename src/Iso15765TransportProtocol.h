@@ -15,6 +15,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <vector>
 
 namespace tp {
 
@@ -90,10 +91,16 @@ private:
         CanFrame frame;
 };
 
-template <typename CanFrameT = CanFrame, typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = TimeProvider,
-          typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
+/**
+ * Buffer for all input and ouptut operations
+ */
+using IsoMessageDefault = std::vector<uint8_t>;
+
+template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessageDefault, typename CanOutputInterfaceT = LinuxCanOutputInterface,
+          typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
 struct TransportProtocolTraits {
         using CanMessage = CanFrameT;
+        using IsoMessage = IsoMessageT;
         using CanOutputInterface = CanOutputInterfaceT;
         using TimeProvider = TimeProviderT;
         using ErrorHandler = ErrorHandlerT;
@@ -111,6 +118,7 @@ struct TransportProtocolTraits {
 template <typename TraitsT> class TransportProtocol {
 public:
         using CanMessage = typename TraitsT::CanMessage;
+        using IsoMessage = typename TraitsT::IsoMessage;
         using CanOutputInterface = typename TraitsT::CanOutputInterface;
         using TimeProvider = typename TraitsT::TimeProvider;
         using ErrorHandler = typename TraitsT::ErrorHandler;
@@ -138,7 +146,7 @@ public:
             : stack{ errorHandler },
               callback{ callback },
               outputInterface{ outputInterface },
-              timeProvider{ timeProvider },
+              //              timeProvider{ timeProvider },
               errorHandler{ errorHandler }
         {
         }
@@ -155,7 +163,7 @@ public:
          * first byte of CAN payload is used for the extended address, and second is used for PCI (Protocol
          * Control Information).
          */
-        bool request (Buffer const &msg);
+        bool request (IsoMessage const &msg);
 
         /**
          * Connection parameters are beeing figured out here according to procedures described in
@@ -174,15 +182,39 @@ public:
         /// If connected.
         //        bool isConnected () const { return connected; }
 
-        /*****************************************************************************/
-        /* Timer class                                                               */
-        /*****************************************************************************/
+        /*
+         * API jest asynchroniczne, bo na prawdę nie ma tego jak inaczej zrobić. Ramki CAN
+         * przychodzą asynchronicznie (odpowiedzi na żądanie, ale także mogą przyjść same z
+         * siebie) oraz może ich przyjść różna ilość. Zadając jakieś pytanie (na przykład o
+         * błędy) nie jesteśmy w stanie do końca powiedzieć ile tych ramek przyjdzie. Na
+         * przykład jeżeli mamy 1 ECU, to mogą przyjść 2 ramki składające się na 1 wiadomość
+         * ISO, ale jeżeli mamy 2 ECU to mogą przyjść 3 albo 4 i tak dalej.
+         *
+         * API synchroniczne działało tak, że oczekiwało odpowiedzi tylko od jednego ECU. To
+         * może być SingleFrame, albo FF + x * CF, ale dało się określić koniec tej wiadomości.
+         * Kiedy wykryło koniec, to kończyło działanie ignorując ewentualne inne wiadomości.
+         * Asynchroniczne API naprawia ten problem.
+         */
+        /**
+         * Składa wiadomość ISO z poszczególnych ramek CAN. Zwraca czy potrzeba więcej ramek can aby
+         * złożyć wiadomość ISO w całości. Kiedy podamy obiekt wiadomości jako drugi parametr, to
+         * nie wywołuje callbacku, tylko zapisuje wynik w tym obiekcie. To jest używane w connect.
+         */
+        void onCanNewFrame (CanFrame const &f) { onCanNewFrame (CanMessageWrapperType{ f } /*, nullptr*/); }
+
+        //?? Po co to
+        void onCanError (uint32_t e);
+
 private:
         static uint32_t now ()
         {
                 static TimeProvider tp;
                 return tp ();
         }
+
+        /*****************************************************************************/
+        /* Timer class                                                               */
+        /*****************************************************************************/
 
         /**
          * @brief The Timer class
@@ -237,7 +269,7 @@ private:
                 int append (CanMessageWrapperType const &frame, size_t offset, size_t len);
 
                 uint32_t address = 0; /// Address Information M_AI
-                Buffer data;          /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
+                IsoMessage data;      /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
                 TransportMessage *prev = nullptr; /// Double linked list implementation.
                 TransportMessage *next = nullptr; /// Double linked list implementation.
                 int multiFrameRemainingLen = 0;   /// For tracking number of bytes remaining.
@@ -245,31 +277,6 @@ private:
                 Timer timer;                      /// For tracking time between first and consecutive frames with the same address.
         };
 
-public:
-        /*
-         * API jest asynchroniczne, bo na prawdę nie ma tego jak inaczej zrobić. Ramki CAN
-         * przychodzą asynchronicznie (odpowiedzi na żądanie, ale także mogą przyjść same z
-         * siebie) oraz może ich przyjść różna ilość. Zadając jakieś pytanie (na przykład o
-         * błędy) nie jesteśmy w stanie do końca powiedzieć ile tych ramek przyjdzie. Na
-         * przykład jeżeli mamy 1 ECU, to mogą przyjść 2 ramki składające się na 1 wiadomość
-         * ISO, ale jeżeli mamy 2 ECU to mogą przyjść 3 albo 4 i tak dalej.
-         *
-         * API synchroniczne działało tak, że oczekiwało odpowiedzi tylko od jednego ECU. To
-         * może być SingleFrame, albo FF + x * CF, ale dało się określić koniec tej wiadomości.
-         * Kiedy wykryło koniec, to kończyło działanie ignorując ewentualne inne wiadomości.
-         * Asynchroniczne API naprawia ten problem.
-         */
-        /**
-         * Składa wiadomość ISO z poszczególnych ramek CAN. Zwraca czy potrzeba więcej ramek can aby
-         * złożyć wiadomość ISO w całości. Kiedy podamy obiekt wiadomości jako drugi parametr, to
-         * nie wywołuje callbacku, tylko zapisuje wynik w tym obiekcie. To jest używane w connect.
-         */
-        void onCanNewFrame (CanFrame const &f) { onCanNewFrame (CanMessageWrapperType{ f } /*, nullptr*/); }
-
-        //?? Po co to
-        void onCanError (uint32_t e);
-
-private:
         bool onCanNewFrame (CanMessageWrapperType const &frame);
 
         /// Double linked list wiadomości ISO 15765-2 (tych długich do 4095).
@@ -307,13 +314,13 @@ private:
 
         Callback callback;
         CanOutputInterface outputInterface;
-        TimeProvider timeProvider;
+        //        TimeProvider timeProvider;
         ErrorHandler errorHandler;
 };
 
-template <typename CanFrameT = CanFrame, typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = TimeProvider,
-          typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
-TransportProtocol<TransportProtocolTraits<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>>
+template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessageDefault, typename CanOutputInterfaceT = LinuxCanOutputInterface,
+          typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
+TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>>
 create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ErrorHandlerT errorHandler = {})
 {
         return { callback, outputInterface, timeProvider, errorHandler };
@@ -322,7 +329,7 @@ create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProvid
 /*****************************************************************************/
 
 // TODO to trzeba zaimplementować od nowa
-template <typename TraitsT> bool TransportProtocol<TraitsT>::request (Buffer const &msg)
+template <typename TraitsT> bool TransportProtocol<TraitsT>::request (IsoMessage const &msg)
 {
         if ((isCanExtAddrActive () && (msg.size () > 6)) || (msg.size () > 7)) {
                 return false;
@@ -812,15 +819,21 @@ int TransportProtocol<TraitsT>::TransportMessage::append (CanMessageWrapperType 
         }
 }
 
-/*****************************************************************************/
-
-// template <typename TraitsT>
-// std::ostream &
-// operator<< (std::ostream &o,
-//            typename TransportProtocol<TraitsT>::TransportMessage const &tm)
-//{
-//        o << "TransportMessage addr = " << tm.address << ", data = " << tm.data;
-//        return o;
-//}
-
 } // namespace tp
+
+inline std::ostream &operator<< (std::ostream &o, tp::IsoMessageDefault const &b)
+{
+        o << "[";
+
+        for (auto i = b.cbegin (); i != b.cend ();) {
+
+                o << std::hex << int(*i);
+
+                if (++i != b.cend ()) {
+                        o << ",";
+                }
+        }
+
+        o << "]";
+        return o;
+}
