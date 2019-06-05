@@ -26,7 +26,7 @@ inline std::ostream &operator<< (std::ostream &o, Buffer const &b)
 
         for (auto i = b.cbegin (); i != b.cend ();) {
 
-                o << *i;
+                o << std::hex << int(*i);
 
                 if (++i != b.cend ()) {
                         o << ",";

@@ -167,8 +167,8 @@ public:
         /*****************************************************************************/
         /* Timer class                                                               */
         /*****************************************************************************/
-
-        static uint32_t getTick ()
+private:
+        static uint32_t now ()
         {
                 static TimeProvider tp;
                 return tp ();
@@ -210,7 +210,7 @@ public:
                 }
 
                 /// Returns system wide ms since system start.
-                uint32_t getTick () { return getTick (); }
+                uint32_t getTick () { return now (); }
 
         protected:
                 uint32_t startTime = 0;
@@ -235,6 +235,7 @@ public:
                 Timer timer;                      /// For tracking time between first and consecutive frames with the same address.
         };
 
+public:
         /*
          * API jest asynchroniczne, bo na prawdę nie ma tego jak inaczej zrobić. Ramki CAN
          * przychodzą asynchronicznie (odpowiedzi na żądanie, ale także mogą przyjść same z
@@ -254,6 +255,8 @@ public:
          * nie wywołuje callbacku, tylko zapisuje wynik w tym obiekcie. To jest używane w connect.
          */
         void onCanNewFrame (CanFrame const &f) { onCanNewFrame (CanMessageWrapperType{ f } /*, nullptr*/); }
+
+        //?? Po co to
         void onCanError (uint32_t e);
 
 private:
@@ -366,7 +369,7 @@ bool TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandl
         case CAN_SINGLE_FRAME: {
                 TransportMessage message;
                 int singleFrameLen = nPciByte1; // Nie trzeba maskować z 0x0F, bo N_PCItype == 0.
-                message.data.resize (singleFrameLen);
+                // message.data.resize (singleFrameLen);
 
                 // Error situation. Such frames should be ignored according to 6.5.2.2 page 24.
                 if (singleFrameLen <= 0 || (isCanExtAddrActive () && singleFrameLen > 6) || singleFrameLen > 7) {
@@ -801,17 +804,17 @@ template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProvide
 int TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessage::append (
         CanMessageWrapperType const &frame, size_t offset, size_t len)
 {
-        size_t outputIndex = data.size ();
-        for (size_t inputIndex = offset; inputIndex < len; ++inputIndex, ++outputIndex) {
-                data[outputIndex] = frame.get (inputIndex);
+        auto outputIndex = data.end ();
+        for (size_t inputIndex = 0; inputIndex < len; ++inputIndex, ++outputIndex) {
+                data.insert (outputIndex, frame.get (inputIndex + offset));
         }
 }
 
 /*****************************************************************************/
 
-//template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-//std::ostream &
-//operator<< (std::ostream &o,
+// template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
+// std::ostream &
+// operator<< (std::ostream &o,
 //            typename TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessage const &tm)
 //{
 //        o << "TransportMessage addr = " << tm.address << ", data = " << tm.data;

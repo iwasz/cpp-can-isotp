@@ -30,13 +30,6 @@ struct CanFrame {
                 data[7] = data7;
         }
 
-        //        std::ostream &operator<< (std::ostream &o) const
-        //        {
-        //                // TODO data.
-        //                o << "CanFrame id = " << id << ", dlc = " << dlc << ", ext = " << extended << ", data = " /*<< data*/;
-        //                return o;
-        //        }
-
         uint32_t id = 0;
         bool extended = false;
         uint8_t dlc = 0;
