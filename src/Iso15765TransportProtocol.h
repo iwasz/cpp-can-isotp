@@ -90,22 +90,32 @@ private:
         CanFrame frame;
 };
 
+template <typename CanFrameT = CanFrame, typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = TimeProvider,
+          typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
+struct TransportProtocolTraits {
+        using CanMessage = CanFrameT;
+        using CanOutputInterface = CanOutputInterfaceT;
+        using TimeProvider = TimeProviderT;
+        using ErrorHandler = ErrorHandlerT;
+        using Callback = CallbackT;
+};
+
 /**
- * Implementuje  ISO-TP, czyli ISO 15765-2 ze szczególnym nacisiekiem na OBD, a więc nie
- * implementuje niektórych rzeczy, które do OBD nie są potrzebne. ISO-TP jest bowiem wykorzystywane
- * także w komunikacji ECU-ECU wewnątrz pojazdów (nie tylko do diagnostyki).
+ * Implementuje  ISO-TP, czyli ISO 15765-2
  * Dokumentacja:
- * - http://iwasz.pl/private/index.php/STM32_CAN#ISO_15765-2
  * - ISO-15765-2-2004.pdf rozdział 6 "Network Layer Protocol"
  * - https://en.wikipedia.org/wiki/ISO_15765-2
  * - http://canbushack.com/iso-15765-2/
  * - http://iwasz.pl/private/index.php/STM32_CAN#ISO_15765-2
  */
-template <typename CanFrameT = CanFrame, typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = TimeProvider,
-          typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
-class TransportProtocol {
+template <typename TraitsT> class TransportProtocol {
 public:
-        using CanMessageWrapperType = CanMessageWrapper<CanFrameT>;
+        using CanMessage = typename TraitsT::CanMessage;
+        using CanOutputInterface = typename TraitsT::CanOutputInterface;
+        using TimeProvider = typename TraitsT::TimeProvider;
+        using ErrorHandler = typename TraitsT::ErrorHandler;
+        using Callback = typename TraitsT::Callback;
+        using CanMessageWrapperType = CanMessageWrapper<CanMessage>;
 
         /// NPDU -> Network Protocol Data Unit
         enum IsoNPduType { CAN_SINGLE_FRAME = 0, CAN_FIRST_FRAME = 1, CAN_CONSECUTIVE_FRAME = 2, CAN_FLOW_CONTROL_FRAME = 3 };
@@ -123,8 +133,8 @@ public:
         /// FS field in Flow Control Frame
         enum FlowStatus { STATUS_CONTINUE_TO_SEND = 0, STATUS_WAIT = 1, STATUS_OVERFLOW = 2 };
 
-        TransportProtocol (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {},
-                           ErrorHandlerT errorHandler = {})
+        TransportProtocol (Callback callback, CanOutputInterface outputInterface = {}, TimeProvider timeProvider = {},
+                           ErrorHandler errorHandler = {})
             : stack{ errorHandler },
               callback{ callback },
               outputInterface{ outputInterface },
@@ -266,7 +276,7 @@ private:
         class TransportMessageList {
         public:
                 enum { MAX_MESSAGE_NUM = 8 };
-                TransportMessageList (ErrorHandlerT &e) : first (nullptr), size (0), errorHandler (e) {}
+                TransportMessageList (ErrorHandler &e) : first (nullptr), size (0), errorHandler (e) {}
 
                 TransportMessage *findMessage (uint32_t address);
                 TransportMessage *addMessage (uint32_t address, size_t bufferSize);
@@ -277,7 +287,7 @@ private:
         private:
                 TransportMessage *first;
                 size_t size;
-                ErrorHandlerT &errorHandler;
+                ErrorHandler &errorHandler;
         };
 
         uint32_t getID (bool extended) const;
@@ -295,17 +305,24 @@ private:
         //        bool connected = false;
         uint8_t canExtAddr = 0;
 
-        CallbackT callback;
-        CanOutputInterfaceT outputInterface;
-        TimeProviderT timeProvider;
-        ErrorHandlerT errorHandler;
+        Callback callback;
+        CanOutputInterface outputInterface;
+        TimeProvider timeProvider;
+        ErrorHandler errorHandler;
 };
+
+template <typename CanFrameT = CanFrame, typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = TimeProvider,
+          typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
+TransportProtocol<TransportProtocolTraits<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>>
+create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ErrorHandlerT errorHandler = {})
+{
+        return { callback, outputInterface, timeProvider, errorHandler };
+}
 
 /*****************************************************************************/
 
 // TODO to trzeba zaimplementować od nowa
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-bool TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::request (Buffer const &msg)
+template <typename TraitsT> bool TransportProtocol<TraitsT>::request (Buffer const &msg)
 {
         if ((isCanExtAddrActive () && (msg.size () > 6)) || (msg.size () > 7)) {
                 return false;
@@ -340,17 +357,12 @@ bool TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandl
 
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-void TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::onCanError (uint32_t e)
-{
-        errorHandler (e);
-}
+template <typename TraitsT> void TransportProtocol<TraitsT>::onCanError (uint32_t e) { errorHandler (e); }
 
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-bool TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::onCanNewFrame (
-        const CanMessageWrapperType &frame /*, TransportMessage *outMessage*/)
+template <typename TraitsT>
+bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &frame /*, TransportMessage *outMessage*/)
 {
 #if 0
         Debug *d = Debug::singleton ();
@@ -639,8 +651,7 @@ Iso15765TransportProtocol::ConnectionState Iso15765TransportProtocol::connectSin
 #endif
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-void TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::checkTimeouts ()
+template <typename TraitsT> void TransportProtocol<TraitsT>::checkTimeouts ()
 {
         TransportMessage *ptr = stack.getFirst ();
 
@@ -657,8 +668,7 @@ void TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandl
 
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-void TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::setCanExtAddr (uint8_t u)
+template <typename TraitsT> void TransportProtocol<TraitsT>::setCanExtAddr (uint8_t u)
 {
         canExtAddrActive = true;
         canExtAddr = u;
@@ -666,15 +676,14 @@ void TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandl
 
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-uint32_t TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::getID (bool extended) const
+template <typename TraitsT> uint32_t TransportProtocol<TraitsT>::getID (bool extended) const
 {
         // ISO 15765-4:2005 chapter 6.3.2.2 & 6.3.2.3
         return (extended) ? (0x18db33f1) : (0x7df);
 }
 
-// template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-// void TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::setFilterAndMask (bool extended)
+// template <typename TraitsT>
+// void TransportProtocol<TraitsT>::setFilterAndMask (bool extended)
 //{
 //        if (extended) {
 //                driver->setFilterAndMask (0x18DAF100, 0x1FFFFF00, extended);
@@ -686,9 +695,7 @@ uint32_t TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorH
 
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-void TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::processFlowFrame (
-        CanMessageWrapperType const &frame, FlowStatus fs)
+template <typename TraitsT> void TransportProtocol<TraitsT>::processFlowFrame (CanMessageWrapperType const &frame, FlowStatus fs)
 {
         if (extendedFrame) {
                 /*
@@ -710,9 +717,8 @@ void TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandl
 
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-typename TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessage *
-TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessageList::findMessage (uint32_t address)
+template <typename TraitsT>
+typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT>::TransportMessageList::findMessage (uint32_t address)
 {
         TransportMessage *ptr = first;
 
@@ -729,10 +735,9 @@ TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, 
 
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-typename TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessage *
-TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessageList::addMessage (uint32_t address,
-                                                                                                                              size_t bufferSize)
+template <typename TraitsT>
+typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT>::TransportMessageList::addMessage (uint32_t address,
+                                                                                                                     size_t bufferSize)
 {
         if (size++ >= MAX_MESSAGE_NUM) {
                 return nullptr;
@@ -740,8 +745,8 @@ TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, 
 
         TransportMessage *m = new TransportMessage ();
         m->address = address;
-        m->data.reserve (bufferSize);
-        m->data.clear ();
+        //        m->data.reserve (bufferSize);
+        //        m->data.clear ();
 
         TransportMessage **ptr = &first;
         TransportMessage *last = nullptr;
@@ -757,10 +762,8 @@ TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, 
 
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-typename TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessage *
-TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessageList::removeMessage (
-        TransportMessage *m)
+template <typename TraitsT>
+typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT>::TransportMessageList::removeMessage (TransportMessage *m)
 {
         if (!m) {
                 return nullptr;
@@ -800,9 +803,8 @@ TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, 
 
 /*****************************************************************************/
 
-template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
-int TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessage::append (
-        CanMessageWrapperType const &frame, size_t offset, size_t len)
+template <typename TraitsT>
+int TransportProtocol<TraitsT>::TransportMessage::append (CanMessageWrapperType const &frame, size_t offset, size_t len)
 {
         auto outputIndex = data.end ();
         for (size_t inputIndex = 0; inputIndex < len; ++inputIndex, ++outputIndex) {
@@ -812,10 +814,10 @@ int TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandle
 
 /*****************************************************************************/
 
-// template <typename CanFrameT, typename CanOutputInterfaceT, typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
+// template <typename TraitsT>
 // std::ostream &
 // operator<< (std::ostream &o,
-//            typename TransportProtocol<CanFrameT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>::TransportMessage const &tm)
+//            typename TransportProtocol<TraitsT>::TransportMessage const &tm)
 //{
 //        o << "TransportMessage addr = " << tm.address << ", data = " << tm.data;
 //        return o;

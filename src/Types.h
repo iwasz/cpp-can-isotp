@@ -14,11 +14,14 @@
 #include <iostream>
 #include <string>
 #include <vector>
+//#include <list>
+//#include <array>
 
 /**
  * Buffer for all input and ouptut operations
  */
 typedef std::vector<uint8_t> Buffer;
+//using Buffer = std::array<uint8_t, 128> ;
 
 inline std::ostream &operator<< (std::ostream &o, Buffer const &b)
 {
