@@ -6,13 +6,5 @@
  *  ~~~~~~~~~                                                               *
  ****************************************************************************/
 
-#ifndef TRANSPORTMESSAGE_H
-#define TRANSPORTMESSAGE_H
-
-#include "Timer.h"
-#include "Types.h"
-#include <cstdint>
-
-
-
-#endif // TRANSPORTMESSAGE_H
+#define CATCH_CONFIG_MAIN // This tells Catch to provide a main() - only do this in one cpp file
+#include "catch.hpp"

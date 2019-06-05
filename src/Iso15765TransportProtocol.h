@@ -7,10 +7,6 @@
  ****************************************************************************/
 
 #pragma once
-#include "CanFrame.h"
-#include "ITransportProtocolCallback.h"
-#include "TransportMessage.h"
-#include "Types.h"
 #include <cstdint>
 #include <functional>
 #include <iostream>
@@ -20,17 +16,44 @@
 namespace tp {
 
 /**
- * Impl details :
- * - Can interface (Can link layer)
- *  - setCanCallback - delete
- *  - send
- *  - setFilterAndMask
- * - CanFrame interface
- * - Timer
- * - Error handling
- *
- * - Buffer type - dynamic versus static allocation
+ * Default CAN message API. You can use it right out of the box or you can use some
+ * other class among with a wrapper which you have to provide in sych a scenario.
+ * This lets you integrate this transport protocol layer with existing link protocol
+ * libraries.
  */
+struct CanFrame {
+        //        const static uint8_t DEFAULT_BYTE = 0x55;
+
+        CanFrame () = default;
+        //        CanFrame (uint32_t id, bool extended, uint8_t data0, uint8_t data1 = DEFAULT_BYTE, uint8_t data2 = DEFAULT_BYTE,
+        //                  uint8_t data3 = DEFAULT_BYTE, uint8_t data4 = DEFAULT_BYTE, uint8_t data5 = DEFAULT_BYTE, uint8_t data6 =
+        //                  DEFAULT_BYTE, uint8_t data7 = DEFAULT_BYTE)
+        //            : id (id), extended (extended), data{ data0, data1, data2, data3, data4, data5, data6, data7 }
+        //        {
+        //        }
+
+        template <typename... T> CanFrame (uint32_t id, bool extended, T... t) : id (id), extended (extended), data{ t... }
+        { /*add (t...);*/
+        }
+
+        //        template <typename T> void add (T t)
+        //        {
+        //                static_assert (std::is_same<T, uint8_t>::value);
+        //                data[data.size ()] = t;
+        //        }
+
+        //        template <typename T, typename... Rs> void add (T t, Rs... r)
+        //        {
+        //                static_assert (std::is_same<T, uint8_t>::value);
+        //                data[data.size ()] = t;
+        //                add (r...);
+        //        }
+
+        uint32_t id = 0;
+        bool extended = false;
+        uint8_t dlc () const { return uint8_t (data.size ()); }
+        std::array<uint8_t, 8> data{};
+};
 
 struct TimeProvider {
         uint32_t operator() () const { return 0; }
@@ -49,7 +72,7 @@ enum class Error : uint32_t {
 };
 
 struct InfiniteLoop {
-        void operator() (Error e)
+        void operator() (Error)
         {
                 while (true) {
                 }
@@ -71,7 +94,7 @@ template <> class CanMessageWrapper<CanFrame> {
 public:
         explicit CanMessageWrapper (CanFrame const &cf) : frame (cf) {} /// Construct from underlying implementation type.
 
-        CanMessageWrapper (uint32_t id, bool extended, uint8_t dlc, uint8_t data0 = 0x55) : frame (id, extended, dlc, data0) {}
+        template <typename... T> CanMessageWrapper (uint32_t id, bool extended, T... data) : frame (id, extended, data...) {}
 
         CanFrame const &value () const { return frame; } /// Transform to underlying implementation type.
 
@@ -81,8 +104,8 @@ public:
         bool isExtended () const { return frame.extended; }
         void setExtended (bool b) { frame.extended = b; }
 
-        uint8_t getDlc () const { return frame.dlc; }
-        void setDlc (uint8_t d) { frame.dlc = d; }
+        uint8_t getDlc () const { return frame.dlc (); }
+        // void setDlc (uint8_t d) { frame.dlc = d; }
 
         uint8_t get (size_t i) const { return frame.data[i]; }
         void set (size_t i, uint8_t b) { frame.data[i] = b; }
@@ -94,13 +117,13 @@ private:
 /**
  * Buffer for all input and ouptut operations
  */
-using IsoMessageDefault = std::vector<uint8_t>;
+using IsoMessage = std::vector<uint8_t>;
 
-template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessageDefault, typename CanOutputInterfaceT = LinuxCanOutputInterface,
+template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, typename CanOutputInterfaceT = LinuxCanOutputInterface,
           typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
 struct TransportProtocolTraits {
         using CanMessage = CanFrameT;
-        using IsoMessage = IsoMessageT;
+        using IsoMessageTT = IsoMessageT;
         using CanOutputInterface = CanOutputInterfaceT;
         using TimeProvider = TimeProviderT;
         using ErrorHandler = ErrorHandlerT;
@@ -118,7 +141,7 @@ struct TransportProtocolTraits {
 template <typename TraitsT> class TransportProtocol {
 public:
         using CanMessage = typename TraitsT::CanMessage;
-        using IsoMessage = typename TraitsT::IsoMessage;
+        using IsoMessageT = typename TraitsT::IsoMessageTT;
         using CanOutputInterface = typename TraitsT::CanOutputInterface;
         using TimeProvider = typename TraitsT::TimeProvider;
         using ErrorHandler = typename TraitsT::ErrorHandler;
@@ -163,20 +186,12 @@ public:
          * first byte of CAN payload is used for the extended address, and second is used for PCI (Protocol
          * Control Information).
          */
-        bool request (IsoMessage const &msg);
+        bool request (IsoMessageT const &msg);
 
         /**
-         * Connection parameters are beeing figured out here according to procedures described in
-         * ISO 15765-4 chapter 4. CAN connection properties like baudrate and number of bits in ID
-         * are tried one and one and after successful communication we now what setting to use.
+         * Checks for timeouts. Put this in your main loop if you want to detect timeouts (via
+         * callbacks).
          */
-        //        bool connect ();
-
-        void setCanExtAddr (uint8_t u);
-        uint8_t getCanExtAddr () const { return canExtAddr; }
-        bool isCanExtAddrActive () const { return canExtAddrActive; }
-
-        /// Checks for timeouts.
         void checkTimeouts ();
 
         /// If connected.
@@ -200,10 +215,21 @@ public:
          * złożyć wiadomość ISO w całości. Kiedy podamy obiekt wiadomości jako drugi parametr, to
          * nie wywołuje callbacku, tylko zapisuje wynik w tym obiekcie. To jest używane w connect.
          */
-        void onCanNewFrame (CanFrame const &f) { onCanNewFrame (CanMessageWrapperType{ f } /*, nullptr*/); }
+        void onCanNewFrame (CanMessage const &f) { onCanNewFrame (CanMessageWrapperType{ f } /*, nullptr*/); }
 
         //?? Po co to
         void onCanError (uint32_t e);
+
+        /**
+         * Connection parameters are beeing figured out here according to procedures described in
+         * ISO 15765-4 chapter 4. CAN connection properties like baudrate and number of bits in ID
+         * are tried one and one and after successful communication we now what setting to use.
+         */
+        //        bool connect ();
+
+        void setCanExtAddr (uint8_t u);
+        uint8_t getCanExtAddr () const { return canExtAddr; }
+        bool isCanExtAddrActive () const { return canExtAddrActive; }
 
 private:
         static uint32_t now ()
@@ -269,7 +295,7 @@ private:
                 int append (CanMessageWrapperType const &frame, size_t offset, size_t len);
 
                 uint32_t address = 0; /// Address Information M_AI
-                IsoMessage data;      /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
+                IsoMessageT data;     /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
                 TransportMessage *prev = nullptr; /// Double linked list implementation.
                 TransportMessage *next = nullptr; /// Double linked list implementation.
                 int multiFrameRemainingLen = 0;   /// For tracking number of bytes remaining.
@@ -318,7 +344,7 @@ private:
         ErrorHandler errorHandler;
 };
 
-template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessageDefault, typename CanOutputInterfaceT = LinuxCanOutputInterface,
+template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, typename CanOutputInterfaceT = LinuxCanOutputInterface,
           typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
 TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>>
 create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ErrorHandlerT errorHandler = {})
@@ -329,7 +355,7 @@ create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProvid
 /*****************************************************************************/
 
 // TODO to trzeba zaimplementować od nowa
-template <typename TraitsT> bool TransportProtocol<TraitsT>::request (IsoMessage const &msg)
+template <typename TraitsT> bool TransportProtocol<TraitsT>::request (IsoMessageT const &msg)
 {
         if ((isCanExtAddrActive () && (msg.size () > 6)) || (msg.size () > 7)) {
                 return false;
@@ -388,7 +414,6 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
         case CAN_SINGLE_FRAME: {
                 TransportMessage message;
                 int singleFrameLen = nPciByte1; // Nie trzeba maskować z 0x0F, bo N_PCItype == 0.
-                // message.data.resize (singleFrameLen);
 
                 // Error situation. Such frames should be ignored according to 6.5.2.2 page 24.
                 if (singleFrameLen <= 0 || (isCanExtAddrActive () && singleFrameLen > 6) || singleFrameLen > 7) {
@@ -405,16 +430,8 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
                 }
 
                 uint8_t dataOffset = nPciOffset + 1;
-                // std::copy (frame.data + dataOffset, frame.data + dataOffset + singleFrameLen, message.data.begin ());
                 message.append (frame, dataOffset, singleFrameLen);
-
-                //                if (outMessage) {
-                //                        *outMessage = std::move (message);
-                //                }
-                //                else {
-                //                        callback (std::move (message));
                 callback (message.data);
-                //                }
         } break;
 
         case CAN_FIRST_FRAME: {
@@ -453,7 +470,6 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
                 isoMessage->multiFrameRemainingLen = multiFrameRemainingLen - firstFrameLen;
                 isoMessage->timer.start (N_B_TIMEOUT);
                 uint8_t dataOffset = nPciOffset + 2;
-                // std::copy (frame.data + dataOffset, frame.data + dataOffset + firstFrameLen, std::back_inserter (isoMessage->data));
                 isoMessage->append (frame, dataOffset, firstFrameLen);
 
                 // Send Flow Control
@@ -490,13 +506,7 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
                         return true;
                 }
                 else {
-                        //                        if (outMessage) {
-                        //                                *outMessage = std::move (*isoMessage);
-                        //                        }
-                        //                        else {
-                        // callback (std::move (*isoMessage));
                         callback (isoMessage->data);
-                        //                        }
                         stack.removeMessage (isoMessage);
                 }
         } break;
@@ -709,13 +719,13 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::processFlowFrame (C
                  * BlockSize == 0, which means indefinite block size, and STMin == 0 which means
                  * minimum delay between consecutive frames
                  */
-                CanMessageWrapperType ctrlData (0x18DA00F1 | ((frame.getId () & 0xFF) << 8), true, 8, 0x30 | fs);
+                CanMessageWrapperType ctrlData (0x18DA00F1 | ((frame.getId () & 0xFF) << 8), true, 0x30 | fs);
                 ctrlData.set (1, 0);
                 ctrlData.set (2, 0);
                 outputInterface (ctrlData.value ());
         }
         else {
-                CanMessageWrapperType ctrlData (0x7E0 | (frame.getId () & 0x07), false, 8, 0x30 | fs);
+                CanMessageWrapperType ctrlData (0x7E0 | (frame.getId () & 0x07), false, 0x30 | fs);
                 ctrlData.set (1, 0);
                 ctrlData.set (2, 0);
                 outputInterface (ctrlData.value ());
@@ -813,15 +823,16 @@ typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT
 template <typename TraitsT>
 int TransportProtocol<TraitsT>::TransportMessage::append (CanMessageWrapperType const &frame, size_t offset, size_t len)
 {
-        auto outputIndex = data.end ();
-        for (size_t inputIndex = 0; inputIndex < len; ++inputIndex, ++outputIndex) {
-                data.insert (outputIndex, frame.get (inputIndex + offset));
+        for (size_t inputIndex = 0; inputIndex < len; ++inputIndex) {
+                data.insert (data.end (), frame.get (inputIndex + offset));
         }
+
+        return len;
 }
 
 } // namespace tp
 
-inline std::ostream &operator<< (std::ostream &o, tp::IsoMessageDefault const &b)
+inline std::ostream &operator<< (std::ostream &o, tp::IsoMessage const &b)
 {
         o << "[";
 
@@ -835,5 +846,12 @@ inline std::ostream &operator<< (std::ostream &o, tp::IsoMessageDefault const &b
         }
 
         o << "]";
+        return o;
+}
+
+inline std::ostream &operator<< (std::ostream &o, tp::CanFrame const &cf)
+{
+        // TODO data.
+        o << "CanFrame id = " << cf.id << ", dlc = " << cf.dlc () << ", ext = " << cf.extended << ", data = " /*<< data*/;
         return o;
 }
