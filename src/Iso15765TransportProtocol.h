@@ -16,7 +16,7 @@
 #include <iostream>
 #include <memory>
 
-// TODO add short namespace
+namespace tp {
 
 /**
  * Impl details :
@@ -822,3 +822,5 @@ int TransportProtocol<TraitsT>::TransportMessage::append (CanMessageWrapperType 
 //        o << "TransportMessage addr = " << tm.address << ", data = " << tm.data;
 //        return o;
 //}
+
+} // namespace tp
