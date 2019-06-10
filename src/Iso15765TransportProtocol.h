@@ -118,8 +118,9 @@ private:
  */
 using IsoMessage = std::vector<uint8_t>;
 
-template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, typename CanOutputInterfaceT = LinuxCanOutputInterface,
-          typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
+template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, size_t MAX_MESSAGE_SIZE_T = 4095,
+          typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop,
+          typename CallbackT = CoutPrinter>
 struct TransportProtocolTraits {
         using CanMessage = CanFrameT;
         using IsoMessageTT = IsoMessageT;
@@ -127,6 +128,7 @@ struct TransportProtocolTraits {
         using TimeProvider = TimeProviderT;
         using ErrorHandler = ErrorHandlerT;
         using Callback = CallbackT;
+        static constexpr size_t MAX_MESSAGE_SIZE = MAX_MESSAGE_SIZE_T;
 };
 
 /**
@@ -151,6 +153,7 @@ public:
         using ErrorHandler = typename TraitsT::ErrorHandler;
         using Callback = typename TraitsT::Callback;
         using CanMessageWrapperType = CanMessageWrapper<CanMessage>;
+        static constexpr size_t MAX_MESSAGE_SIZE = TraitsT::MAX_MESSAGE_SIZE;
 
         /// NPDU -> Network Protocol Data Unit
         enum IsoNPduType { SINGLE_FRAME = 0, FIRST_FRAME = 1, CONSECUTIVE_FRAME = 2, FLOW_FRAME = 3 };
@@ -396,9 +399,11 @@ private:
 
 /*****************************************************************************/
 
-template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, typename CanOutputInterfaceT = LinuxCanOutputInterface,
-          typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
-TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>>
+template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, size_t MAX_MESSAGE_SIZE = 4095,
+          typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop,
+          typename CallbackT = CoutPrinter>
+TransportProtocol<
+        TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, CanOutputInterfaceT, TimeProviderT, ErrorHandlerT, CallbackT>>
 create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ErrorHandlerT errorHandler = {})
 {
         return { callback, outputInterface, timeProvider, errorHandler };
@@ -408,6 +413,10 @@ create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProvid
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::send (IsoMessageT const &msg)
 {
+        if (msg.size () > MAX_MESSAGE_SIZE) {
+                return false;
+        }
+
         // 6 or 7 depending on addressing used
         const size_t SINGLE_FRAME_MAX_SIZE = 7 - int(isCanExtAddrActive ());
 
@@ -425,6 +434,10 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (IsoMessageT c
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::send (IsoMessageT &&msg)
 {
+        if (msg.size () > MAX_MESSAGE_SIZE) {
+                return false;
+        }
+
         // 6 or 7 depending on addressing used
         const size_t SINGLE_FRAME_MAX_SIZE = 7 - int(isCanExtAddrActive ());
 

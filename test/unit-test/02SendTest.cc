@@ -241,8 +241,8 @@ TEST_CASE ("tx 4095B", "[transmission]")
         REQUIRE (calledTimes == 586);
 }
 
-//TEST_CASE ("tx 4096B", "[transmission]")
-//{
-//        auto tp = create ([](auto &&) {});
-//        REQUIRE (tp.send (std::vector<uint8_t> (4095)) == false);
-//}
+TEST_CASE ("tx 4096B", "[transmission]")
+{
+        auto tp = create ([](auto &&) {});
+        REQUIRE (tp.send (std::vector<uint8_t> (4096)) == false);
+}
