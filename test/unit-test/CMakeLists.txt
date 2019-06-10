@@ -11,7 +11,9 @@ INCLUDE_DIRECTORIES("../../src/")
 ADD_EXECUTABLE(unit-test
     "../../src/Iso15765TransportProtocol.h"
     "00CatchInit.cc"
-    "01AsyncTest.cc"
+    "01RecvTest.cc"
+    "02SendTest.cc"
+    "03CanFrameTest.cc"
 )
 
 ADD_TEST (unit-test unit-test)

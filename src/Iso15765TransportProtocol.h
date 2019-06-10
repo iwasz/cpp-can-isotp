@@ -22,17 +22,11 @@ namespace tp {
  * libraries.
  */
 struct CanFrame {
-        //        const static uint8_t DEFAULT_BYTE = 0x55;
 
         CanFrame () = default;
-        //        CanFrame (uint32_t id, bool extended, uint8_t data0, uint8_t data1 = DEFAULT_BYTE, uint8_t data2 = DEFAULT_BYTE,
-        //                  uint8_t data3 = DEFAULT_BYTE, uint8_t data4 = DEFAULT_BYTE, uint8_t data5 = DEFAULT_BYTE, uint8_t data6 =
-        //                  DEFAULT_BYTE, uint8_t data7 = DEFAULT_BYTE)
-        //            : id (id), extended (extended), data{ data0, data1, data2, data3, data4, data5, data6, data7 }
-        //        {
-        //        }
 
-        template <typename... T> CanFrame (uint32_t id, bool extended, T... t) : id (id), extended (extended), data{ t... }
+        template <typename... T>
+        CanFrame (uint32_t id, bool extended, T... t) : id (id), extended (extended), data{ uint8_t (t)... }, dlc (sizeof...(t))
         { /*add (t...);*/
         }
 
@@ -49,10 +43,10 @@ struct CanFrame {
         //                add (r...);
         //        }
 
-        uint32_t id = 0;
-        bool extended = false;
-        uint8_t dlc () const { return uint8_t (data.size ()); }
-        std::array<uint8_t, 8> data{};
+        uint32_t id;
+        bool extended;
+        std::array<uint8_t, 8> data;
+        uint8_t dlc;
 };
 
 struct TimeProvider {
@@ -72,15 +66,20 @@ enum class Error : uint32_t {
 };
 
 struct InfiniteLoop {
-        void operator() (Error)
+        [[noreturn]] void operator() (Error)
         {
                 while (true) {
                 }
         }
 };
 
+/**
+ * This interface assumes that sending single CAN frame is instant and we
+ * now the status (whether it failed or succeeded) instantly (thus boolean)
+ * return type.
+ */
 struct LinuxCanOutputInterface {
-        bool operator() (CanFrame const &cf) { return true; }
+        bool operator() (CanFrame const &) { return true; }
 };
 
 struct CoutPrinter {
@@ -104,8 +103,8 @@ public:
         bool isExtended () const { return frame.extended; }
         void setExtended (bool b) { frame.extended = b; }
 
-        uint8_t getDlc () const { return frame.dlc (); }
-        // void setDlc (uint8_t d) { frame.dlc = d; }
+        uint8_t getDlc () const { return frame.dlc; }
+        void setDlc (uint8_t d) { frame.dlc = d; }
 
         uint8_t get (size_t i) const { return frame.data[i]; }
         void set (size_t i, uint8_t b) { frame.data[i] = b; }
@@ -131,12 +130,17 @@ struct TransportProtocolTraits {
 };
 
 /**
- * Implementuje  ISO-TP, czyli ISO 15765-2
- * Dokumentacja:
+ * Implements ISO 15765-2 which is also called CAN ISO-TP or CAN ISO transport protocol.
+ * Sources:
  * - ISO-15765-2-2004.pdf rozdział 6 "Network Layer Protocol"
  * - https://en.wikipedia.org/wiki/ISO_15765-2
  * - http://canbushack.com/iso-15765-2/
  * - http://iwasz.pl/private/index.php/STM32_CAN#ISO_15765-2
+ *
+ * TODO Handle ISO messages that are constrained to less than maximum 4095B allowed by the
+ * ISO document.
+ * TODO Use some beter means of unit testing. Test time dependent calls, maybe use some
+ * clever unit testing library like trompeleoleil for mocking.
  */
 template <typename TraitsT> class TransportProtocol {
 public:
@@ -149,7 +153,7 @@ public:
         using CanMessageWrapperType = CanMessageWrapper<CanMessage>;
 
         /// NPDU -> Network Protocol Data Unit
-        enum IsoNPduType { CAN_SINGLE_FRAME = 0, CAN_FIRST_FRAME = 1, CAN_CONSECUTIVE_FRAME = 2, CAN_FLOW_CONTROL_FRAME = 3 };
+        enum IsoNPduType { SINGLE_FRAME = 0, FIRST_FRAME = 1, CONSECUTIVE_FRAME = 2, FLOW_FRAME = 3 };
 
         /*
          * As in 6.7.1 "Timing parameters". According to ISO 15765-2 it's 1000ms.
@@ -164,7 +168,7 @@ public:
         /// FS field in Flow Control Frame
         enum FlowStatus { STATUS_CONTINUE_TO_SEND = 0, STATUS_WAIT = 1, STATUS_OVERFLOW = 2 };
 
-        TransportProtocol (Callback callback, CanOutputInterface outputInterface = {}, TimeProvider timeProvider = {},
+        TransportProtocol (Callback callback, CanOutputInterface outputInterface = {}, TimeProvider /*timeProvider*/ = {},
                            ErrorHandler errorHandler = {})
             : stack{ errorHandler },
               callback{ callback },
@@ -181,21 +185,28 @@ public:
         ~TransportProtocol () = default;
 
         /**
-         * Sending is curently limited to 1 CAN frame which means, that we can send only 7 bytes if
-         * ISO 15765-2 extended addressing if off, or 6 when its on. When extended addressing is active,
-         * first byte of CAN payload is used for the extended address, and second is used for PCI (Protocol
-         * Control Information).
+         * Sends a message. If msg is so long, that it wouldn't fit in a SINGLE_FRAME (6 or 7 bytes
+         * depending on addressing used), it is COPIED into the transport protocol object for further
+         * processing, and then via run method is send in multiple CONSECUTIVE_FRAMES.
          */
-        bool request (IsoMessageT const &msg);
+        bool send (IsoMessageT const &msg);
 
         /**
-         * Checks for timeouts. Put this in your main loop if you want to detect timeouts (via
-         * callbacks).
+         * Sends a message. If msg is so long, that it wouldn't fit in a SINGLE_FRAME (6 or 7 bytes
+         * depending on addressing used), it is MOVED into the transport protocol object for further
+         * processing, and then via run method is send in multiple CONSECUTIVE_FRAMES.
          */
-        void checkTimeouts ();
+        bool send (IsoMessageT &&msg);
 
-        /// If connected.
-        //        bool isConnected () const { return connected; }
+        /**
+         * Does the book keeping (checks for timeouts, runs the sending state machine).
+         */
+        void run ();
+
+        /**
+         *
+         */
+        bool isSending () const { return bool(stateMachine); }
 
         /*
          * API jest asynchroniczne, bo na prawdę nie ma tego jak inaczej zrobić. Ramki CAN
@@ -215,7 +226,7 @@ public:
          * złożyć wiadomość ISO w całości. Kiedy podamy obiekt wiadomości jako drugi parametr, to
          * nie wywołuje callbacku, tylko zapisuje wynik w tym obiekcie. To jest używane w connect.
          */
-        void onCanNewFrame (CanMessage const &f) { onCanNewFrame (CanMessageWrapperType{ f } /*, nullptr*/); }
+        void onCanNewFrame (CanMessage const &f) { onCanNewFrame (CanMessageWrapperType{ f }); }
 
         //?? Po co to
         void onCanError (uint32_t e);
@@ -238,11 +249,7 @@ private:
                 return tp ();
         }
 
-        /*****************************************************************************/
-        /* Timer class                                                               */
-        /*****************************************************************************/
-
-        /**
+        /*
          * @brief The Timer class
          */
         class Timer {
@@ -278,18 +285,16 @@ private:
                 }
 
                 /// Returns system wide ms since system start.
-                uint32_t getTick () { return now (); }
+                uint32_t getTick () const { return now (); }
 
         protected:
                 uint32_t startTime = 0;
                 uint32_t intervalMs = 0;
         };
 
-        /*****************************************************************************/
-        /* Timer class                                                               */
-        /*****************************************************************************/
-
-        /// Messages composed from CAN frames.
+        /*
+         * An ISO 15765-2 message (up to 4095B long). Messages composed from CAN frames.
+         */
         struct TransportMessage {
 
                 int append (CanMessageWrapperType const &frame, size_t offset, size_t len);
@@ -305,14 +310,16 @@ private:
 
         bool onCanNewFrame (CanMessageWrapperType const &frame);
 
-        /// Double linked list wiadomości ISO 15765-2 (tych długich do 4095).
+        /*
+         * Double linked list of ISO 15765-2 messages (up to 4095B long).
+         */
         class TransportMessageList {
         public:
                 enum { MAX_MESSAGE_NUM = 8 };
                 TransportMessageList (ErrorHandler &e) : first (nullptr), size (0), errorHandler (e) {}
 
                 TransportMessage *findMessage (uint32_t address);
-                TransportMessage *addMessage (uint32_t address, size_t bufferSize);
+                TransportMessage *addMessage (uint32_t address /*, size_t bufferSize*/);
                 TransportMessage *removeMessage (TransportMessage *m);
                 size_t getSize () const { return size; }
                 TransportMessage *getFirst () { return first; }
@@ -323,9 +330,52 @@ private:
                 ErrorHandler &errorHandler;
         };
 
+        /*
+         * StateMachine class implements an algorithm for sending a single ISO message, which
+         * can be up to 4095B longa and thus has to be divided into multiple CAN frames.
+         */
+        class StateMachine {
+        public:
+                enum class State { IDLE, SEND_FIRST_FRAME, RECEIVE_FLOW_FRAME, SEND_CONSECUTIVE_FRAME, DONE };
+
+                StateMachine (CanOutputInterface &o, IsoMessageT const &m)
+                    : outputInterface (o), message (m), state{ State::IDLE }, bytesSent (0)
+                {
+                }
+
+                StateMachine (CanOutputInterface &o, IsoMessageT &&m) : outputInterface (o), message (m), state{ State::IDLE }, bytesSent (0) {}
+
+                ~StateMachine () = default;
+
+                StateMachine (StateMachine &&sm) noexcept = default;
+                StateMachine &operator= (StateMachine &&sm) noexcept = default;
+
+                StateMachine (StateMachine const &sm) noexcept : message{ sm.message }, state{ sm.state } {}
+                StateMachine &operator= (StateMachine const &sm) noexcept
+                {
+                        message = sm.message;
+                        state = sm.state;
+                        return *this;
+                }
+
+                void run (CanMessageWrapperType const *frame = nullptr);
+                State getState () const { return state; }
+
+        private:
+                CanOutputInterface &outputInterface;
+                IsoMessageT message;
+                State state;
+                size_t bytesSent = 0;
+                uint8_t serialNumber = 1;
+        };
+
+        /*---------------------------------------------------------------------------*/
+
         uint32_t getID (bool extended) const;
-        //        void setFilterAndMask (bool extended);
         void processFlowFrame (const CanMessageWrapperType &msgBuffer, FlowStatus fs = STATUS_CONTINUE_TO_SEND);
+        bool sendSingleFrame (IsoMessageT const &msg);
+        bool sendMultipleFrames (IsoMessageT const &msg);
+        bool sendMultipleFrames (IsoMessageT &&msg);
 
         //        enum ConnectionState { CONNECTED, SEND_FUNCTIONAL_11, WAIT_REPLY_11, SEND_FUNCTIONAL_29, WAIT_REPLY_29, NOT_ISO_COMPLIANT };
         //        ConnectionState connectSingleBaudrate ();
@@ -340,9 +390,11 @@ private:
 
         Callback callback;
         CanOutputInterface outputInterface;
-        //        TimeProvider timeProvider;
         ErrorHandler errorHandler;
+        std::optional<StateMachine> stateMachine;
 };
+
+/*****************************************************************************/
 
 template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, typename CanOutputInterfaceT = LinuxCanOutputInterface,
           typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
@@ -354,37 +406,74 @@ create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProvid
 
 /*****************************************************************************/
 
-// TODO to trzeba zaimplementować od nowa
-template <typename TraitsT> bool TransportProtocol<TraitsT>::request (IsoMessageT const &msg)
+template <typename TraitsT> bool TransportProtocol<TraitsT>::send (IsoMessageT const &msg)
 {
-        if ((isCanExtAddrActive () && (msg.size () > 6)) || (msg.size () > 7)) {
-                return false;
+        // 6 or 7 depending on addressing used
+        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int(isCanExtAddrActive ());
+
+        if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
+                return sendSingleFrame (msg);
+        }
+        else { // Send using multiple frames, state machine, and timing controll and whatnot.
+                return sendMultipleFrames (msg);
         }
 
-        int totalLen = msg.size () + 1; // Data size + 1 byte for 'Single Frame' PCI.
-        // CanFrame canFrame (getID (extendedFrame), extendedFrame, 8, 0);
+        return true;
+}
 
-        CanMessageWrapperType canFrame;
+/*****************************************************************************/
 
-        int index = 0;
+template <typename TraitsT> bool TransportProtocol<TraitsT>::send (IsoMessageT &&msg)
+{
+        // 6 or 7 depending on addressing used
+        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int(isCanExtAddrActive ());
 
-        // Another +1 byte for extended address.
-        if (isCanExtAddrActive ()) {
-                ++totalLen;
-                canFrame.data[index++] = getCanExtAddr ();
+        if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
+                return sendSingleFrame (msg);
+        }
+        else { // Send using multiple frames, state machine, and timing controll and whatnot.
+                return sendMultipleFrames (msg);
         }
 
-        canFrame.data[index++] = msg.size ();
-        //        memcpy (canFrame.data + index, msg.data (), msg.size ());
+        return true;
+}
+
+/*****************************************************************************/
+
+template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (IsoMessageT const &msg)
+{
+        CanMessageWrapperType canFrame{ 0x00, true, IsoNPduType::SINGLE_FRAME | (msg.size () & 0x0f) };
 
         for (size_t i = 0; i < msg.size (); ++i) {
-                canFrame.at (index + i) = msg[i];
+                canFrame.set (i + 1, msg.at (i));
         }
 
-        if (!outputInterface (canFrame)) {
-                return false;
-        }
+        canFrame.setDlc (1 + msg.size ());
+        return outputInterface (canFrame.value ());
+}
 
+/*****************************************************************************/
+
+template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (IsoMessageT const &msg)
+{
+        // Start state machine.
+        // 1. Send first frame
+        stateMachine = StateMachine{ outputInterface, msg };
+
+        // 2. wait for Flow frame
+        // 3. Send consecutive frames with preset delay.
+        return true;
+}
+
+// TODO I wouldn't multiply those methods but rather use perfect forwarding magic (?)
+template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (IsoMessageT &&msg)
+{
+        // Start state machine.
+        // 1. Send first frame
+        stateMachine = StateMachine{ outputInterface, msg };
+
+        // 2. wait for Flow frame
+        // 3. Send consecutive frames with preset delay.
         return true;
 }
 
@@ -394,8 +483,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::onCanError (uint32_
 
 /*****************************************************************************/
 
-template <typename TraitsT>
-bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &frame /*, TransportMessage *outMessage*/)
+template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &frame)
 {
 #if 0
         Debug *d = Debug::singleton ();
@@ -408,10 +496,10 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
 
         uint8_t nPciOffset = (isCanExtAddrActive ()) ? (1) : (0);
         uint8_t nPciByte1 = frame.get (nPciOffset); /// MSB, pierwszy bajt.
-        uint8_t npduType = (nPciByte1 & 0xF0) >> 4;
+        uint8_t npduType = ((nPciByte1 & 0xF0) >> 4);
 
         switch (npduType) {
-        case CAN_SINGLE_FRAME: {
+        case IsoNPduType::SINGLE_FRAME: {
                 TransportMessage message;
                 int singleFrameLen = nPciByte1; // Nie trzeba maskować z 0x0F, bo N_PCItype == 0.
 
@@ -434,7 +522,7 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
                 callback (message.data);
         } break;
 
-        case CAN_FIRST_FRAME: {
+        case IsoNPduType::FIRST_FRAME: {
                 uint16_t multiFrameRemainingLen = ((nPciByte1 & 0x0f) << 8) | frame.get (nPciOffset + 1);
 
                 // Error situation. Such frames should be ignored according to ISO.
@@ -459,7 +547,7 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
                 }
 
                 int firstFrameLen = (isCanExtAddrActive ()) ? (5) : (6);
-                isoMessage = stack.addMessage (frame.getId (), multiFrameRemainingLen);
+                isoMessage = stack.addMessage (frame.getId () /*, multiFrameRemainingLen*/);
 
                 if (!isoMessage) {
                         errorHandler (Error::N_MESSAGE_NUM_MAX);
@@ -477,7 +565,7 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
                 return true;
         } break;
 
-        case CAN_CONSECUTIVE_FRAME: {
+        case IsoNPduType::CONSECUTIVE_FRAME: {
                 TransportMessage *isoMessage = stack.findMessage (frame.getId ());
 
                 if (!isoMessage) {
@@ -509,6 +597,15 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
                         callback (isoMessage->data);
                         stack.removeMessage (isoMessage);
                 }
+
+        } break;
+
+        case IsoNPduType::FLOW_FRAME: {
+                if (!stateMachine) {
+                        break;
+                }
+
+                stateMachine->run (&frame);
         } break;
 
         default:
@@ -519,157 +616,10 @@ bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &fra
 }
 
 /*****************************************************************************/
-#if 0
-bool Iso15765TransportProtocol::connect ()
+
+template <typename TraitsT> void TransportProtocol<TraitsT>::run ()
 {
-        // 500kbps
-        driver->setBaudratePrescaler (6);
-        Debug::singleton ()->print ("500kbps\n");
-
-        if (connectSingleBaudrate () == CONNECTED) {
-                return true;
-        }
-
-        // 250kbps
-        driver->setBaudratePrescaler (12);
-        Debug::singleton ()->print ("250kbps\n");
-
-        if (connectSingleBaudrate () == CONNECTED) {
-                return true;
-        }
-        else {
-                driver->disable ();
-                return false;
-        }
-}
-
-/*****************************************************************************/
-
-Iso15765TransportProtocol::ConnectionState Iso15765TransportProtocol::connectSingleBaudrate ()
-{
-        driver->interrupts (false);
-        ConnectionState currentState = SEND_FUNCTIONAL_11;
-        int retry = 1;
-
-        while (currentState != CONNECTED && currentState != NOT_ISO_COMPLIANT) {
-                switch (currentState) {
-                case SEND_FUNCTIONAL_11: // Connector A
-                        setFilterAndMask (false);
-                        Debug::singleton ()->print ("send11\n");
-                        if (!driver->send (CanFrame (getID (false), false, 8, 0x02, 0x01, 0x00), 100)) { // TODO timeout według ISO
-                                currentState = NOT_ISO_COMPLIANT;
-                                Debug::singleton ()->print ("11 not iso\n");
-                        }
-                        else {
-                                currentState = WAIT_REPLY_11;
-                                Debug::singleton ()->print ("wait for 11 reply\n");
-                        }
-                        break;
-
-                case WAIT_REPLY_11: { // Connector B
-                        TransportMessage reply;
-                        CanFrame f;
-
-                        do {
-                                f = driver->read (P2_TIMEOUT);
-
-                                // Timeout już podczas odbierania pierwszej ramki.
-                                if (!f) {
-                                        currentState = SEND_FUNCTIONAL_29; // Go to C.
-                                        break;
-                                }
-                        } while (onCanNewFrame (f, &reply));
-
-                        if (currentState == SEND_FUNCTIONAL_29) {
-                                Debug::singleton ()->print ("11 reply timeout. try 29\n");
-                                break;
-                        }
-
-                        Debug::singleton ()->print ("11 reply OK\n");
-
-                        if (reply.data[0] == 0x41) { // Positive respone
-                                Debug::singleton ()->print ("11 reply positive\n");
-                                currentState = CONNECTED;
-                                extendedFrame = false;
-                        }
-                        else { // Negative reponse 0x21
-                                Debug::singleton ()->print ("11 reply negative\n");
-                                if (++retry >= 6) {
-                                        currentState = NOT_ISO_COMPLIANT;
-                                        Debug::singleton ()->print ("not iso\n");
-                                }
-                                else {
-                                        HAL_Delay (200);
-                                        currentState = SEND_FUNCTIONAL_11;
-                                        Debug::singleton ()->print ("11 retry\n");
-                                }
-                        }
-                } break;
-
-                case SEND_FUNCTIONAL_29: // Connector C
-                        setFilterAndMask (true);
-                        retry = 1;
-                        if (!driver->send (CanFrame (getID (true), true, 8, 0x02, 0x01, 0x00), 100)) { // TODO timeout według ISO
-                                currentState = NOT_ISO_COMPLIANT;
-                        }
-                        else {
-                                currentState = WAIT_REPLY_29;
-                        }
-                        break;
-
-                case WAIT_REPLY_29: { // Connector D
-                        TransportMessage reply;
-                        CanFrame f;
-
-                        do {
-                                f = driver->read (P2_TIMEOUT);
-
-                                // Timeout już podczas odbierania pierwszej ramki.
-                                if (!f) {
-                                        currentState = NOT_ISO_COMPLIANT; // Go to C.
-                                        break;
-                                }
-                        } while (onCanNewFrame (f, &reply));
-
-                        if (currentState == NOT_ISO_COMPLIANT) {
-                                break;
-                        }
-
-                        if (reply.data[0] == 0x41) { // Positive respone
-                                currentState = CONNECTED;
-                                extendedFrame = true;
-                        }
-                        else { // Negative reponse 0x21
-                                if (++retry >= 6) {
-                                        currentState = NOT_ISO_COMPLIANT;
-                                }
-                                else {
-                                        HAL_Delay (200);
-                                        currentState = SEND_FUNCTIONAL_29;
-                                }
-                        }
-                } break;
-
-                case NOT_ISO_COMPLIANT: // Connector F
-                default:
-                        connected = false;
-                        break;
-                }
-        }
-
-        connected = (currentState == CONNECTED);
-
-        if (connected) {
-                driver->interrupts (true);
-        }
-
-        return currentState;
-}
-#endif
-/*****************************************************************************/
-
-template <typename TraitsT> void TransportProtocol<TraitsT>::checkTimeouts ()
-{
+        // Check for timeouts between CAN frames while receiving.
         TransportMessage *ptr = stack.getFirst ();
 
         while (ptr) {
@@ -680,6 +630,15 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::checkTimeouts ()
                 }
 
                 ptr = ptr->next;
+        }
+
+        // Run state machine(s) if any to perform transmission.
+        if (stateMachine) {
+                stateMachine->run ();
+        }
+
+        if (stateMachine->getState () == StateMachine::State::DONE) {
+                stateMachine = std::nullopt;
         }
 }
 
@@ -712,6 +671,7 @@ template <typename TraitsT> uint32_t TransportProtocol<TraitsT>::getID (bool ext
 
 /*****************************************************************************/
 
+// TODO addresses are messed up, whole addressing thing should be reimplemented, checked.
 template <typename TraitsT> void TransportProtocol<TraitsT>::processFlowFrame (CanMessageWrapperType const &frame, FlowStatus fs)
 {
         if (extendedFrame) {
@@ -753,8 +713,8 @@ typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT
 /*****************************************************************************/
 
 template <typename TraitsT>
-typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT>::TransportMessageList::addMessage (uint32_t address,
-                                                                                                                     size_t bufferSize)
+typename TransportProtocol<TraitsT>::TransportMessage *
+TransportProtocol<TraitsT>::TransportMessageList::addMessage (uint32_t address /*,size_t bufferSize*/)
 {
         if (size++ >= MAX_MESSAGE_NUM) {
                 return nullptr;
@@ -830,7 +790,84 @@ int TransportProtocol<TraitsT>::TransportMessage::append (CanMessageWrapperType 
         return len;
 }
 
+/*****************************************************************************/
+
+template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (CanMessageWrapperType const *frame)
+{
+        uint16_t isoMessageSize = message.size ();
+
+        switch (state) {
+        case State::IDLE:
+                state = State::SEND_FIRST_FRAME;
+                break;
+
+        case State::SEND_FIRST_FRAME: {
+                // TODO addressing
+                CanMessageWrapperType canFrame (0x00, true, (IsoNPduType::FIRST_FRAME << 4) | (isoMessageSize & 0xf00) >> 8,
+                                                (isoMessageSize & 0x0ff));
+
+                int toSend = std::min<int> (isoMessageSize, 6);
+                for (int i = 0; i < toSend; ++i) {
+                        canFrame.set (i + 2, message.at (i));
+                }
+
+                canFrame.setDlc (2 + toSend);
+                // TODO what if it fails (returns false).
+                outputInterface (canFrame.value ());
+                state = State::RECEIVE_FLOW_FRAME;
+                bytesSent += toSend;
+                // TDOO start timer.
+        } break;
+
+        case State::RECEIVE_FLOW_FRAME:
+                if (!frame) {
+                        // checkTimer ();
+                        // If timer is overdue, cal error handler, finish state machine
+                        break;
+                }
+
+                if (frame) {
+                        IsoNPduType type = IsoNPduType ((frame->get (0) & 0xf0) >> 4);
+                        if (type == IsoNPduType::FLOW_FRAME) {
+                                state = State::SEND_CONSECUTIVE_FRAME;
+                        }
+                }
+
+                // if (flowFrame is valid) change state
+                break;
+
+        case State::SEND_CONSECUTIVE_FRAME: {
+                if (bytesSent >= message.size ()) {
+                        state = State::DONE;
+                        break;
+                }
+
+                // TODO addressing
+                CanMessageWrapperType canFrame (0x00, true, (IsoNPduType::CONSECUTIVE_FRAME << 4) | serialNumber);
+
+                ++serialNumber;
+                serialNumber %= 16;
+
+                int toSend = std::min<int> (isoMessageSize - bytesSent, 7);
+                for (int i = 0; i < toSend; ++i) {
+                        canFrame.set (i + 1, message.at (i + bytesSent));
+                }
+
+                canFrame.setDlc (1 + toSend);
+                // TODO what if it fails (returns false).
+                outputInterface (canFrame.value ());
+                bytesSent += toSend;
+
+        } break;
+
+        default:
+                break;
+        }
+}
+
 } // namespace tp
+
+/*****************************************************************************/
 
 inline std::ostream &operator<< (std::ostream &o, tp::IsoMessage const &b)
 {
@@ -849,9 +886,24 @@ inline std::ostream &operator<< (std::ostream &o, tp::IsoMessage const &b)
         return o;
 }
 
+/*****************************************************************************/
+
 inline std::ostream &operator<< (std::ostream &o, tp::CanFrame const &cf)
 {
         // TODO data.
-        o << "CanFrame id = " << cf.id << ", dlc = " << cf.dlc () << ", ext = " << cf.extended << ", data = " /*<< data*/;
+        o << "CanFrame id = " << cf.id << ", dlc = " << int(cf.dlc) << ", ext = " << cf.extended << ", data = [";
+
+        for (int i = 0; i < cf.dlc;) {
+                o << int(cf.data[i]);
+
+                if (++i != cf.dlc) {
+                        o << ",";
+                }
+                else {
+                        break;
+                }
+        }
+
+        o << "]";
         return o;
 }

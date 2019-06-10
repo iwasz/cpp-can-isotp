@@ -8,11 +8,10 @@
 
 #include "Iso15765TransportProtocol.h"
 #include "catch.hpp"
-#include <iostream>
 
 using namespace tp;
 
-TEST_CASE ("1 byte", "[reception]")
+TEST_CASE ("rx 1B", "[reception]")
 {
         bool called = false;
         auto tp = create ([&called](auto &&tm) {
@@ -25,7 +24,7 @@ TEST_CASE ("1 byte", "[reception]")
         REQUIRE (called);
 }
 
-TEST_CASE ("7 bytes", "[reception]")
+TEST_CASE ("rx 7B", "[reception]")
 {
         bool called = false;
         auto tp = create ([&called](auto &&tm) {
@@ -44,7 +43,7 @@ TEST_CASE ("7 bytes", "[reception]")
         REQUIRE (called);
 }
 
-TEST_CASE ("8 bytes", "[reception]")
+TEST_CASE ("rx 8B", "[reception]")
 {
         bool called = false;
         bool flow = false;
@@ -73,7 +72,7 @@ TEST_CASE ("8 bytes", "[reception]")
         REQUIRE (flow);
 }
 
-TEST_CASE ("13 bytes", "[reception]")
+TEST_CASE ("rx 13B", "[reception]")
 {
         bool called = false;
         bool flow = false;
@@ -108,7 +107,7 @@ TEST_CASE ("13 bytes", "[reception]")
         REQUIRE (flow);
 }
 
-TEST_CASE ("4095 bytes", "[reception]")
+TEST_CASE ("rx 4095B", "[reception]")
 {
         bool called = false;
         bool flow = false;
