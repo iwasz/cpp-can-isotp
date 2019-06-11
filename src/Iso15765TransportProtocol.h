@@ -49,13 +49,38 @@ struct CanFrame {
         uint8_t dlc;
 };
 
+class Address {
+public:
+        /// 5.3.1 Mtype
+        enum class MessageType : uint8_t { DIAGNOSTICS, REMOTE_DIAGNOSTICS };
+        /// Type and range of this address information.
+        uint8_t mType;
+
+        /// 5.3.2.2 N_SA encodes the network sender address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
+        uint8_t sourceAddress;
+
+        /// 5.3.2.3 N_TA encodes the network target address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
+        uint8_t targetAddress;
+
+        /// N_TAtype
+        enum class TargetAddressType : uint8_t {
+                PHYSICAL,  /// 1 to 1 communiaction supported for multiple and single frame communications
+                FUNCTIONAL /// 1 to n communication (like broadcast?) is allowed only for single frame comms.
+        };
+
+        TargetAddressType targetAddressType;
+
+        /// N_AE used optionally to extend both sa and ta.
+        uint8_t networkAddressExtension;
+};
+
 struct TimeProvider {
         uint32_t operator() () const { return 0; }
 };
 
 enum class Error : uint32_t {
         N_NO_ERROR = 0,              /// No error.
-        N_WRONG_SN = 0x40000000,     /// Zły serial number w Consecutive Frame.
+        N_WRONG_SN = 0x40000000,     /// Zły sequence number w Consecutive Frame.
         N_BUFFER_OVFLW = 0x20000000, /// Przekroczony rozmiar danych które ktoś nam przysyła
         N_TIMEOUT = 0x10000000,      /// 6.7.2 Any N_PDU not transmitted in time on the sender side.
         N_UNEXP_PDU = 0x08000000,
@@ -71,6 +96,10 @@ struct InfiniteLoop {
                 while (true) {
                 }
         }
+};
+
+struct EmptyCallback {
+        template <typename... T>[[noreturn]] void operator() (T...) {}
 };
 
 /**
@@ -134,15 +163,29 @@ struct TransportProtocolTraits {
 /**
  * Implements ISO 15765-2 which is also called CAN ISO-TP or CAN ISO transport protocol.
  * Sources:
- * - ISO-15765-2-2004.pdf rozdział 6 "Network Layer Protocol"
+ * - ISO-15765-2-2004.pdf document.
  * - https://en.wikipedia.org/wiki/ISO_15765-2
  * - http://canbushack.com/iso-15765-2/
  * - http://iwasz.pl/private/index.php/STM32_CAN#ISO_15765-2
  *
  * TODO Handle ISO messages that are constrained to less than maximum 4095B allowed by the
  * ISO document.
+ * TODO implement all types of addressing.
  * TODO Use some beter means of unit testing. Test time dependent calls, maybe use some
  * clever unit testing library like trompeleoleil for mocking.
+ * TODO test crosswise connected objects. They should be able to speak to each other.
+ * TODO test this library with python-can-isotp.
+ * TODO add blocking API.
+ * TODO test this api with std::threads.
+ * TODO implement FF parameters : BS and STime
+ * TODO verify with the ISO pdf whether everything is implemented.
+ *
+ * N_USData.request (fullAddress, message)
+ * N_USData.confirm (fullAddress, result)
+ * N_USData_FF.indication (fullAddress, LENGTH) <- callback that first frame was received. It tells what is the lenghth of expected message
+ * N_USData.indication (fullAddr, Message, result) - after Sf or after multi-can-message
+ * N_ChangeParameter.request (fullAddr, key, value) - requests a parameter change in peer
+ * N_ChangeParameter.confirm  (fullAddr, key, result).
  */
 template <typename TraitsT> class TransportProtocol {
 public:
@@ -153,7 +196,6 @@ public:
         using ErrorHandler = typename TraitsT::ErrorHandler;
         using Callback = typename TraitsT::Callback;
         using CanMessageWrapperType = CanMessageWrapper<CanMessage>;
-        static constexpr size_t MAX_MESSAGE_SIZE = TraitsT::MAX_MESSAGE_SIZE;
 
         /// NPDU -> Network Protocol Data Unit
         enum IsoNPduType { SINGLE_FRAME = 0, FIRST_FRAME = 1, CONSECUTIVE_FRAME = 2, FLOW_FRAME = 3 };
@@ -167,7 +209,7 @@ public:
         /// Max allowed by the ISO standard.
         const int MAX_ALLOWED_ISO_MESSAGE_SIZE = 4095;
         /// Max allowed by this implementation. Can be lowered if memory is scarce.
-        const int MAX_ACCEPTED_ISO_MESSAGE_SIZE = 4095;
+        static constexpr size_t MAX_ACCEPTED_ISO_MESSAGE_SIZE = TraitsT::MAX_MESSAGE_SIZE;
         /// FS field in Flow Control Frame
         enum FlowStatus { STATUS_CONTINUE_TO_SEND = 0, STATUS_WAIT = 1, STATUS_OVERFLOW = 2 };
 
@@ -307,7 +349,7 @@ private:
                 TransportMessage *prev = nullptr; /// Double linked list implementation.
                 TransportMessage *next = nullptr; /// Double linked list implementation.
                 int multiFrameRemainingLen = 0;   /// For tracking number of bytes remaining.
-                int currentSn = 0;                /// Serial number of Consecutive Frame.
+                int currentSn = 0;                /// Sequence number of Consecutive Frame.
                 Timer timer;                      /// For tracking time between first and consecutive frames with the same address.
         };
 
@@ -369,7 +411,7 @@ private:
                 IsoMessageT message;
                 State state;
                 size_t bytesSent = 0;
-                uint8_t serialNumber = 1;
+                uint8_t sequenceNumber = 1;
         };
 
         /*---------------------------------------------------------------------------*/
@@ -413,7 +455,7 @@ create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProvid
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::send (IsoMessageT const &msg)
 {
-        if (msg.size () > MAX_MESSAGE_SIZE) {
+        if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
                 return false;
         }
 
@@ -434,7 +476,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (IsoMessageT c
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::send (IsoMessageT &&msg)
 {
-        if (msg.size () > MAX_MESSAGE_SIZE) {
+        if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
                 return false;
         }
 
@@ -543,7 +585,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         return false;
                 }
 
-                // Error situation : too much data. Should reply with apropriate flow control frame.
+                // 6.5.3.3 Error situation : too much data. Should reply with apropriate flow control frame.
                 if (multiFrameRemainingLen > MAX_ACCEPTED_ISO_MESSAGE_SIZE || multiFrameRemainingLen > MAX_ALLOWED_ISO_MESSAGE_SIZE) {
                         processFlowFrame (frame, STATUS_OVERFLOW);
                         errorHandler (Error::N_BUFFER_OVFLW);
@@ -855,11 +897,17 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                         break;
                 }
 
-                // TODO addressing
-                CanMessageWrapperType canFrame (0x00, true, (IsoNPduType::CONSECUTIVE_FRAME << 4) | serialNumber);
+                if (frame) {
+                        // TODO flow frame can be received during sending of multiple
+                        // frames.
+                        break;
+                }
 
-                ++serialNumber;
-                serialNumber %= 16;
+                // TODO addressing
+                CanMessageWrapperType canFrame (0x00, true, (IsoNPduType::CONSECUTIVE_FRAME << 4) | sequenceNumber);
+
+                ++sequenceNumber;
+                sequenceNumber %= 16;
 
                 int toSend = std::min<int> (isoMessageSize - bytesSent, 7);
                 for (int i = 0; i < toSend; ++i) {
