@@ -32,6 +32,7 @@ void receivingAsyncCallback ()
  * TODO tests:
  * - Test instantiation and usage with other CanFrame type
  * - Test instantiation and usage with other IsoMessage type
+ * - Test flow control.
  *
  * + : covered (done).
  * - : not covered
@@ -52,14 +53,14 @@ void receivingAsyncCallback ()
  *
  * + enum N_Result
  * - Flow control during transmission (chapter 6.3 pages 12, 13, 14).
- *  - Reading BS and STmin from FC frame received aftrer sending FF.
- *  - Waiting for FC between blocks of size BS CAN frames.
- *   - Reading this incoming FC and deciding what to do next.
- *   - If CTS, resume normally,
- *   - WAIT - wait (how much to wait?),
+ *  + Reading BS and STmin from FC frame received aftrer sending FF.
+ *  + Waiting for FC between blocks of size BS CAN frames.
+ *   + Reading this incoming FC and deciding what to do next.
+ *   + If CTS, resume normally,
+ *   + WAIT - wait (how much to wait?),
  *    - If WAIT is received more than N_WFTmax times then fail (this also means, that FC can be received few times ina row).
- *   - OVFLW - what to do then?
- *  - Delay of STmin between CFs
+ *   + OVFLW - what to do then?
+ *  + Delay of STmin between CFs
  *  + Protocol data units : create some factory and polymorphic types berived from CanFrameWrapper
  *
  * - Timing

@@ -13,6 +13,15 @@
 #include <memory>
 #include <vector>
 
+/**
+ * Set maximum number of Flow Control frames with WAIT bit set that can be received
+ * before aborting further transmission of pending message. Check paragraph 6.6 of ISO
+ * on page 23.
+ */
+#if !defined(MAX_WAIT_FRAME_NUMBER)
+#define MAX_WAIT_FRAME_NUMBER 10
+#endif
+
 namespace tp {
 
 /**
@@ -234,6 +243,9 @@ struct TransportProtocolTraits {
  * - https://en.wikipedia.org/wiki/ISO_15765-2
  * - http://canbushack.com/iso-15765-2/
  * - http://iwasz.pl/private/index.php/STM32_CAN#ISO_15765-2
+ *
+ * Note : whenever I refer to a paragraph, or a page in an ISO document, I mean the ISO 15765-2:2004
+ * because this is the only one I could find for free.
  */
 template <typename TraitsT> class TransportProtocol {
 public:
@@ -317,6 +329,8 @@ public:
          */
         bool onCanNewFrame (CanMessage const &f) { return onCanNewFrame (CanMessageWrapperType{ f }); }
 
+        /*---------------------------------------------------------------------------*/
+
         void setCanExtAddr (uint8_t u);
         uint8_t getCanExtAddr () const { return canExtAddr; }
         bool isCanExtAddrActive () const { return canExtAddrActive; }
@@ -330,6 +344,7 @@ private:
 
         /*
          * @brief The Timer class
+         * TODO this timer should have 100µs resolution and 100µs units.
          */
         class Timer {
         public:
@@ -452,6 +467,7 @@ private:
                 uint8_t blockSize = 0;
                 uint16_t separationTimeUs = 0;
                 Timer separationTimer;
+                uint8_t waitFrameNumber = 0;
         };
 
         /*---------------------------------------------------------------------------*/
@@ -481,7 +497,6 @@ private:
         bool extendedFrame = false;
         /// Tells if ISO 15765-2 extended addressing is used or not. Not do be confused with extended CAN frames.
         bool canExtAddrActive = false;
-        //        bool connected = false;
         uint8_t canExtAddr = 0;
 
         Callback callback;
@@ -936,6 +951,14 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
 
                 if (fs == FlowStatus::STATUS_WAIT) {
                         separationTimer.start (separationTimeUs);
+                        ++waitFrameNumber;
+
+                        if (waitFrameNumber >= MAX_WAIT_FRAME_NUMBER) { // In case of MAX_WAIT_FRAME_NUMBER == 0 message will be aborted
+                                                                        // immediately, which is fine according to the ISO.
+                                // TODO confirm (Address{}, Result::N_WFT_OVRN);
+                                state = State::DONE; // abort
+                        }
+
                         break; // state stays at RECEIVE_*_FLOW_CONTROL_FRAME
                 }
 
@@ -954,6 +977,8 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                         }
                 }
 
+                waitFrameNumber = 0;
+                separationTimer.start (0);
                 state = State::SEND_CONSECUTIVE_FRAME;
         } break;
 
