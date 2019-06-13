@@ -229,10 +229,10 @@ TEST_CASE ("tx 4095B", "[transmission]")
         }
 
         tp.send (message);
-        tp.run ();                                      // IDLE -> SEND_FIRST_FRAME
-        tp.run ();                                      // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
-        tp.onCanNewFrame (CanFrame (0x00, true, 0x30)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
-        tp.run ();                                      // SEND_CONSECUTIVE_FRAME -> more consecutive frames
+        tp.run ();                                                  // IDLE -> SEND_FIRST_FRAME
+        tp.run ();                                                  // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
+        tp.onCanNewFrame (CanFrame (0x00, true, 0x30, 0x00, 0x00)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
+        tp.run ();                                                  // SEND_CONSECUTIVE_FRAME -> more consecutive frames
 
         while (tp.isSending ()) {
                 tp.run ();
