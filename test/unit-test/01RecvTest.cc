@@ -63,6 +63,7 @@ TEST_CASE ("rx 8B", "[reception]")
                 [&flow](auto &&canFrame) {
                         flow = true;
                         REQUIRE (true);
+                        return true;
                 });
 
         tp.onCanNewFrame (CanFrame (0x00, true, 0x10, 8, 0, 1, 2, 3, 4, 5));
@@ -97,6 +98,7 @@ TEST_CASE ("rx 13B", "[reception]")
                 [&flow](auto &&canFrame) {
                         flow = true;
                         REQUIRE (canFrame.data[0] == 0x30);
+                        return true;
                 });
 
         // 13B fits into 2 CanFrames
@@ -143,6 +145,7 @@ TEST_CASE ("rx 4095B", "[reception]")
                 [&flow](auto &&canFrame) {
                         flow = true;
                         REQUIRE (canFrame.data[0] == 0x30);
+                        return true;
                 });
 
         tp.onCanNewFrame (CanFrame (0x00, true, 0x1f, 0xff, 0, 1, 2, 3, 4, 5));

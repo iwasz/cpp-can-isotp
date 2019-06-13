@@ -4,8 +4,11 @@
 void receivingAsyncCallback ()
 {
         auto tp = tp::create ([](auto &&tm) { std::cout << "TransportMessage : " << tm; },
-                              [](auto &&canFrame) { std::cout << "CAN Tx : " << canFrame << std::endl; }, tp::TimeProvider{},
-                              [](auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
+                              [](auto &&canFrame) {
+                                      std::cout << "CAN Tx : " << canFrame << std::endl;
+                                      return true;
+                              },
+                              tp::TimeProvider{}, [](auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
 
         // Asynchronous - callback API
         tp.onCanNewFrame (tp::CanFrame (0x00, true, 1, 0x01, 0x67));
@@ -28,6 +31,8 @@ void receivingAsyncCallback ()
  * my biggest concern is the create function and callbacks that it takes.
  * TODO implement all enums that can be found in the ISO document.
  * TODO encapsulate more functionality into CanFrameWrapper. Like gettype, get length, getSerialnumber  etc.
+ * TODO Include a note about N_As and NAr timeouts in the README.md. User shall check if sending
+ * a single CAN frame took les than 1000ms + 50%. He should return false in that case, true otherwise.
  *
  * TODO tests:
  * - Test instantiation and usage with other CanFrame type
@@ -58,7 +63,7 @@ void receivingAsyncCallback ()
  *   + Reading this incoming FC and deciding what to do next.
  *   + If CTS, resume normally,
  *   + WAIT - wait (how much to wait?),
- *    - If WAIT is received more than N_WFTmax times then fail (this also means, that FC can be received few times ina row).
+ *    + If WAIT is received more than N_WFTmax times then fail (this also means, that FC can be received few times ina row).
  *   + OVFLW - what to do then?
  *  + Delay of STmin between CFs
  *  + Protocol data units : create some factory and polymorphic types berived from CanFrameWrapper
