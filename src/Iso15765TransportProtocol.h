@@ -260,6 +260,9 @@ static constexpr size_t N_CR_TIMEOUT = 1500;
  *
  * Note : whenever I refer to a paragraph, or a page in an ISO document, I mean the ISO 15765-2:2004
  * because this is the only one I could find for free.
+ *
+ * Note : I'm assuming full-duplex communication, when onCanNewFrame and run calls are
+ * interleaved.
  */
 template <typename TraitsT> class TransportProtocol {
 public:
@@ -480,11 +483,6 @@ private:
         };
 
         /*---------------------------------------------------------------------------*/
-        /*
-         * N_USData.confirm (fullAddress, result)
-         * N_USData_FF.indication (fullAddress, LENGTH) <- callback that first frame was received. It tells what is the lenghth of expected
-         * message N_USData.indication (fullAddr, Message, result) - after Sf or after multi-can-message
-         */
 
         void confirm (Address const &a, Result r) {}
         void firstFrameIndication (Address const &a, uint16_t len) {}
@@ -497,9 +495,6 @@ private:
         bool sendSingleFrame (IsoMessageT const &msg);
         bool sendMultipleFrames (IsoMessageT const &msg);
         bool sendMultipleFrames (IsoMessageT &&msg);
-
-        //        enum ConnectionState { CONNECTED, SEND_FUNCTIONAL_11, WAIT_REPLY_11, SEND_FUNCTIONAL_29, WAIT_REPLY_29, NOT_ISO_COMPLIANT };
-        //        ConnectionState connectSingleBaudrate ();
 
         TransportMessageList stack;
         /// Tells if CAN frames are extended (29bit ID), or standard (11bit ID).
@@ -601,15 +596,6 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames 
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &frame)
 {
-#if 0
-        Debug *d = Debug::singleton ();
-        d->print ("id:");
-        d->print (to_ascii ((uint8_t *)&frame.id, 4).c_str ());
-        d->print (", data:");
-        d->print (to_ascii (frame.data, frame.dlc).c_str ());
-        d->print ("\n");
-#endif
-
         switch (frame.getType ()) {
         case IsoNPduType::SINGLE_FRAME: {
                 TransportMessage message;
@@ -629,6 +615,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         indication ({}, {}, Result::N_UNEXP_PDU);
                         // Terminate the current reception of segmented message.
                         stack.removeMessage (isoMessage);
+                        break;
                 }
 
                 uint8_t dataOffset = frame.getNPciOffset () + 1;
@@ -689,6 +676,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 TransportMessage *isoMessage = stack.findMessage (frame.getId ());
 
                 if (!isoMessage) {
+                        // As in 6.7.3 Table 18 - ignore
                         return false;
                 }
 
@@ -720,15 +708,15 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
         } break;
 
         case IsoNPduType::FLOW_FRAME: {
-                if (!stateMachine) {
-                        break;
+                if (!stateMachine) { // No segmented transmission active
+                        break;       // Ignore
                 }
 
                 stateMachine->run (&frame);
         } break;
 
         default:
-                break;
+                break; // Ignore unidentified N_PDU. See Table 18.
         }
 
         return false;

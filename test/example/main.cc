@@ -15,8 +15,10 @@ void receivingAsyncCallback ()
 }
 
 /**
- * TODO Handle ISO messages that are constrained to less than maximum 4095B allowed by the
+ * TODO list:
+ * + Handle ISO messages that are constrained to less than maximum 4095B allowed by the
  * ISO document.
+ * - Test the above.
  * TODO implement all types of addressing.
  * TODO Use some beter means of unit testing. Test time dependent calls, maybe use some
  * clever unit testing library like trompeleoleil for mocking.
@@ -24,13 +26,13 @@ void receivingAsyncCallback ()
  * TODO test this library with python-can-isotp.
  * TODO add blocking API.
  * TODO test this api with std::threads.
- * TODO implement FF parameters : BS and STime
+ * + implement FF parameters : BS and STime
  * TODO verify with the ISO pdf whether everything is implemented.
  * TODO Redesign API - I (as a user) hate beeing forced to provide dozens of arguyments upon
  * construction that I don't really care about and do not use them. In this particular case
  * my biggest concern is the create function and callbacks that it takes.
- * TODO implement all enums that can be found in the ISO document.
- * TODO encapsulate more functionality into CanFrameWrapper. Like gettype, get length, getSerialnumber  etc.
+ * + implement all enums that can be found in the ISO document.
+ * + encapsulate more functionality into CanFrameWrapper. Like gettype, get length, getSerialnumber  etc.
  * TODO Include a note about N_As and NAr timeouts in the README.md. User shall check if sending
  * a single CAN frame took les than 1000ms + 50%. He should return false in that case, true otherwise.
  *
@@ -73,6 +75,11 @@ void receivingAsyncCallback ()
  * - Addressing
  *  - Address information is included in every CAN frame whether FF, CF, FC or SF
  *
+ * - Unexpected N_PDU
+ *  - implent (if not imlenmented already)
+ *  - test
  *
+ * - Get rid of dynamic allocation, because there is one.
+ * - Get rid of non English comments.
  */
 int main () { receivingAsyncCallback (); }
