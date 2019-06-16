@@ -19,10 +19,11 @@ TEST_CASE ("tx 1B", "[transmission]")
                                   called = true;
                                   REQUIRE (canFrame.data[0] == 0x01); // SINGLE FRAME, 1B length
                                   REQUIRE (canFrame.data[1] == 0x55); // actual data
+                                  REQUIRE (canFrame.id == 0x67);
                                   return true;
                           });
 
-        tp.send ({ 0x55 });
+        tp.send ({ 0x67 }, { 0x55 });
         REQUIRE (called);
 }
 
@@ -43,7 +44,7 @@ TEST_CASE ("tx 7B", "[transmission]")
                                   return true;
                           });
 
-        tp.send ({ 0, 1, 2, 3, 4, 5, 6 });
+        tp.send ({ 0x00 }, { 0, 1, 2, 3, 4, 5, 6 });
         REQUIRE (called);
 }
 
@@ -78,7 +79,7 @@ TEST_CASE ("tx 8B", "[transmission]")
                                   return false;
                           });
 
-        tp.send ({ 0, 1, 2, 3, 4, 5, 6, 7 });
+        tp.send ({ 0x00 }, { 0, 1, 2, 3, 4, 5, 6, 7 });
         tp.run ();                                      // IDLE -> SEND_FIRST_FRAME
         tp.run ();                                      // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
         tp.onCanNewFrame (CanFrame (0x00, true, 0x30)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
@@ -127,7 +128,7 @@ TEST_CASE ("tx 12B", "[transmission]")
                                   return false;
                           });
 
-        tp.send ({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
+        tp.send ({ 0x00 }, { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
         tp.run ();                                      // IDLE -> SEND_FIRST_FRAME
         tp.run ();                                      // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
         tp.onCanNewFrame (CanFrame (0x00, true, 0x30)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
@@ -228,7 +229,7 @@ TEST_CASE ("tx 4095B", "[transmission]")
                 b = v++;
         }
 
-        tp.send (message);
+        tp.send ({ 0x00 }, message);
         tp.run ();                                                  // IDLE -> SEND_FIRST_FRAME
         tp.run ();                                                  // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
         tp.onCanNewFrame (CanFrame (0x00, true, 0x30, 0x00, 0x00)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
@@ -244,5 +245,5 @@ TEST_CASE ("tx 4095B", "[transmission]")
 TEST_CASE ("tx 4096B", "[transmission]")
 {
         auto tp = create ([](auto &&) {});
-        REQUIRE (tp.send (std::vector<uint8_t> (4096)) == false);
+        REQUIRE (tp.send ({ 0x00 }, std::vector<uint8_t> (4096)) == false);
 }

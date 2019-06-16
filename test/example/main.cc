@@ -47,9 +47,9 @@ void receivingAsyncCallback ()
  * ISO Specification areas
  * - Communication services (page 3):
  *  + N_USData.request (address, message)
- *  + N_USData.confirm (address, result) <- request (this above an only this) completed successfully or not.
- *  + N_USData_FF.indication (address, LENGTH) <- callback that first frame was received. It tells what is the lenghth of expected message
- *  + N_USData.indication (address, Message, result) - after Sf or after multi-can-message. Indicates that new data has arrived.
+ *  - N_USData.confirm (address, result) <- request (this above an only this) completed successfully or not.
+ *  - N_USData_FF.indication (address, LENGTH) <- callback that first frame was received. It tells what is the lenghth of expected message
+ *  - N_USData.indication (address, Message, result) - after Sf or after multi-can-message. Indicates that new data has arrived.
  *
  *  + N_ChangeParameter.request (faddress, key, value) - requests a parameter change in peer or locally, I'm not sure.
  *  + N_ChangeParameter.confirm  (address, key, result).
