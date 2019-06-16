@@ -70,10 +70,25 @@ void receivingAsyncCallback ()
  *  + Delay of STmin between CFs
  *  + Protocol data units : create some factory and polymorphic types berived from CanFrameWrapper
  *
- * - Timing
+ * + Timing
  *
  * - Addressing
  *  - Address information is included in every CAN frame whether FF, CF, FC or SF
+ *  - normal (uses arbitration ID, no constraints on the value)
+ *   - 11b
+ *   - 29b
+ *  - mormal fixed (uses arbitration ID, further requirements as to how to encode this address into the arbitration ID). 29b only
+ *   - physical
+ *   - functional
+ *  - extended. Like normal, but first data byte contains targetAddress, which is absent in arbitration ID.
+ *   - 11b
+ *    - physical
+ *    - functional
+ *   - 29b
+ *    - physical
+ *    - functional
+ *  - mixed
+ *
  *
  * - Unexpected N_PDU
  *  - implent (if not imlenmented already)
