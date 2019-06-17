@@ -7,6 +7,7 @@
  ****************************************************************************/
 
 #pragma once
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <iostream>
@@ -143,9 +144,16 @@ template <typename CanFrameT> struct NormalAddress29Resolver {
 
 /**
  * @brief The TimeProvider struct
+ * TODO if I'm not mistaken, this classes ought to have 100µs resolutiuon instead of 1000.
  */
-struct TimeProvider {
-        uint32_t operator() () const { return 0; }
+struct ChronoTimeProvider {
+        long operator() () const
+        {
+                using namespace std::chrono;
+                system_clock::time_point now = system_clock::now ();
+                auto duration = now.time_since_epoch ();
+                return duration_cast<milliseconds> (duration).count ();
+        }
 };
 
 /**
@@ -587,8 +595,8 @@ private:
 
 template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, size_t MAX_MESSAGE_SIZE = 4095,
           typename AddressResolverT = NormalAddress29Resolver<CanMessageWrapper<CanFrameT>>,
-          typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = TimeProvider, typename ErrorHandlerT = InfiniteLoop,
-          typename CallbackT = CoutPrinter>
+          typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = ChronoTimeProvider,
+          typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
 TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT, TimeProviderT,
                                           ErrorHandlerT, CallbackT>>
 create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ErrorHandlerT errorHandler = {})

@@ -8,7 +8,7 @@ void receivingAsyncCallback ()
                                       std::cout << "CAN Tx : " << canFrame << std::endl;
                                       return true;
                               },
-                              tp::TimeProvider{}, [](auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
+                              tp::ChronoTimeProvider{}, [](auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
 
         // Asynchronous - callback API
         tp.onCanNewFrame (tp::CanFrame (0x00, true, 1, 0x01, 0x67));
