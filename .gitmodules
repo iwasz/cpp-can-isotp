@@ -1,0 +1,6 @@
+[submodule "deps/etl"]
+	path = deps/etl
+	url = git@github.com:ETLCPP/etl.git
+[submodule "deps/GSL"]
+	path = deps/GSL
+	url = git@github.com:microsoft/GSL.git
