@@ -36,7 +36,7 @@ struct CanFrame {
         CanFrame () = default;
 
         template <typename... T>
-        CanFrame (uint32_t id, bool extended, T... t) : id (id), extended (extended), data{ uint8_t (t)... }, dlc (sizeof...(t))
+        CanFrame (uint32_t id, bool extended, T... t) : id (id), extended (extended), data{uint8_t (t)...}, dlc (sizeof...(t))
         { /*add (t...);*/
         }
 
@@ -62,11 +62,11 @@ struct CanFrame {
 struct IAddress {
         virtual ~IAddress () = default;
 
-        //        /// 5.3.1 Mtype
-        //        enum class MessageType : uint8_t { DIAGNOSTICS, REMOTE_DIAGNOSTICS };
-
-        //        /// Type and range of this address information.
-        //        uint8_t mType;
+        /// 5.3.1 Mtype
+        enum class MessageType : uint8_t {
+                DIAGNOSTICS,       /// N_SA, N_TA, N_TAtype are used
+                REMOTE_DIAGNOSTICS /// N_SA, N_TA, N_TAtype and N_AE are used
+        };
 
         /// 5.3.2.2 N_SA encodes the network sender address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
         virtual uint32_t getSourceAddress () const = 0;
@@ -76,11 +76,11 @@ struct IAddress {
         virtual uint32_t getTargetAddress () const = 0;
         virtual void setTargetAddress (uint32_t a) = 0;
 
-        //        /// N_TAtype
-        //        enum class TargetAddressType : uint8_t {
-        //                PHYSICAL,  /// 1 to 1 communiaction supported for multiple and single frame communications
-        //                FUNCTIONAL /// 1 to n communication (like broadcast?) is allowed only for single frame comms.
-        //        };
+        /// N_TAtype Network Target Address Type
+        enum class TargetAddressType : uint8_t {
+                PHYSICAL,  /// 1 to 1 communiaction supported for multiple and single frame communications
+                FUNCTIONAL /// 1 to n communication (like broadcast?) is allowed only for single frame comms.
+        };
 
         //        TargetAddressType targetAddressType;
 
@@ -112,7 +112,7 @@ private:
 
 template <typename CanFrameT> class NormalAddress29 : public IAddress {
 public:
-        NormalAddress29 (CanFrameT const &cf) : canFrame{ cf } {}
+        NormalAddress29 (CanFrameT const &cf) : canFrame{cf} {}
 
         /// 5.3.2.2 N_SA encodes the network sender address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
         uint32_t getSourceAddress () const override { return canFrame.getId (); }
@@ -135,7 +135,7 @@ template <typename CanFrameT> struct NormalAddress29Resolver {
 
         static NormalAddress29<CanFrameT> create (CanFrameT const &f)
         {
-                NormalAddress29 address{ f };
+                NormalAddress29 address{f};
                 return address;
         }
 
@@ -224,7 +224,7 @@ public:
         explicit CanMessageWrapperBase (CanFrame const &cf) : frame (cf) {} /// Construct from underlying implementation type.
         template <typename... T> CanMessageWrapperBase (uint32_t id, bool extended, T... data) : frame (id, extended, data...) {}
 
-        template <typename... T> static CanFrame create (uint32_t id, bool extended, T... data) { return CanFrame{ id, extended, data... }; }
+        template <typename... T> static CanFrame create (uint32_t id, bool extended, T... data) { return CanFrame{id, extended, data...}; }
 
         CanFrame const &value () const { return frame; } /// Transform to underlying implementation type.
 
@@ -258,7 +258,7 @@ public:
 
         /*---------------------------------------------------------------------------*/
 
-        template <typename... T> static CanFrame create (uint32_t id, bool extended, T... data) { return CanFrame{ id, extended, data... }; }
+        template <typename... T> static CanFrame create (uint32_t id, bool extended, T... data) { return CanFrame{id, extended, data...}; }
 
         // TODO implement
         bool isCanExtAddrActive () const { return false; }
@@ -345,11 +345,11 @@ public:
 
         TransportProtocol (Callback callback, CanOutputInterface outputInterface = {}, TimeProvider /*timeProvider*/ = {},
                            ErrorHandler errorHandler = {})
-            : stack{ errorHandler },
-              callback{ callback },
-              outputInterface{ outputInterface },
+            : stack{errorHandler},
+              callback{callback},
+              outputInterface{outputInterface},
               //              timeProvider{ timeProvider },
-              errorHandler{ errorHandler }
+              errorHandler{errorHandler}
         {
         }
 
@@ -386,7 +386,7 @@ public:
         /**
          *
          */
-        bool isSending () const { return bool(stateMachine); }
+        bool isSending () const { return bool (stateMachine); }
 
         /*
          * API jest asynchroniczne, bo na prawdę nie ma tego jak inaczej zrobić. Ramki CAN
@@ -407,7 +407,7 @@ public:
          * nie wywołuje callbacku, tylko zapisuje wynik w tym obiekcie. To jest używane w connect.
          *
          */
-        bool onCanNewFrame (CanMessage const &f) { return onCanNewFrame (CanMessageWrapperType{ f }); }
+        bool onCanNewFrame (CanMessage const &f) { return onCanNewFrame (CanMessageWrapperType{f}); }
 
         /*---------------------------------------------------------------------------*/
 
@@ -464,7 +464,7 @@ private:
                 /// Convenience method, simple delay ms.
                 void delay (uint32_t delayMs)
                 {
-                        Timer t{ delayMs };
+                        Timer t{delayMs};
                         while (!t.isExpired ())
                                 ;
                 }
@@ -537,7 +537,7 @@ private:
                 StateMachine (StateMachine &&sm) noexcept = default;
                 StateMachine &operator= (StateMachine &&sm) noexcept = default;
 
-                StateMachine (StateMachine const &sm) noexcept : message{ sm.message }, state{ sm.state } {}
+                StateMachine (StateMachine const &sm) noexcept : message{sm.message}, state{sm.state} {}
                 StateMachine &operator= (StateMachine const &sm) noexcept
                 {
                         message = sm.message;
@@ -601,7 +601,7 @@ TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SI
                                           ErrorHandlerT, CallbackT>>
 create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ErrorHandlerT errorHandler = {})
 {
-        return { callback, outputInterface, timeProvider, errorHandler };
+        return {callback, outputInterface, timeProvider, errorHandler};
 }
 
 /*****************************************************************************/
@@ -613,7 +613,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
         }
 
         // 6 or 7 depending on addressing used
-        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int(isCanExtAddrActive ());
+        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (isCanExtAddrActive ());
 
         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
                 return sendSingleFrame (a, msg);
@@ -634,7 +634,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
         }
 
         // 6 or 7 depending on addressing used
-        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int(isCanExtAddrActive ());
+        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (isCanExtAddrActive ());
 
         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
                 return sendSingleFrame (a, msg);
@@ -650,7 +650,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (const Address &a, IsoMessageT const &msg)
 {
-        CanMessageWrapperType canFrame{ 0x00, true, int(IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f) };
+        CanMessageWrapperType canFrame{0x00, true, int (IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f)};
         AddressResolver::apply (a, &canFrame);
 
         for (size_t i = 0; i < msg.size (); ++i) {
@@ -665,14 +665,14 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (co
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (const Address &a, IsoMessageT const &msg)
 {
-        stateMachine = StateMachine{ outputInterface, a, msg };
+        stateMachine = StateMachine{outputInterface, a, msg};
         return true;
 }
 
 // TODO I wouldn't multiply those methods but rather use perfect forwarding magic (?)
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (const Address &a, IsoMessageT &&msg)
 {
-        stateMachine = StateMachine{ outputInterface, a, msg };
+        stateMachine = StateMachine{outputInterface, a, msg};
         return true;
 }
 
@@ -1011,7 +1011,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
 
         case State::SEND_FIRST_FRAME: {
                 // TODO addressing
-                CanMessageWrapperType canFrame (0x00, false, (int(IsoNPduType::FIRST_FRAME) << 4) | (isoMessageSize & 0xf00) >> 8,
+                CanMessageWrapperType canFrame (0x00, false, (int (IsoNPduType::FIRST_FRAME) << 4) | (isoMessageSize & 0xf00) >> 8,
                                                 (isoMessageSize & 0x0ff));
                 AddressResolver::apply (address, &canFrame);
 
@@ -1109,7 +1109,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                         break;
                 }
 
-                CanMessageWrapperType canFrame (0x00, true, (int(IsoNPduType::CONSECUTIVE_FRAME) << 4) | sequenceNumber);
+                CanMessageWrapperType canFrame (0x00, true, (int (IsoNPduType::CONSECUTIVE_FRAME) << 4) | sequenceNumber);
                 AddressResolver::apply (address, &canFrame);
 
                 ++sequenceNumber;
@@ -1156,7 +1156,7 @@ inline std::ostream &operator<< (std::ostream &o, tp::IsoMessage const &b)
 
         for (auto i = b.cbegin (); i != b.cend ();) {
 
-                o << std::hex << int(*i);
+                o << std::hex << int (*i);
 
                 if (++i != b.cend ()) {
                         o << ",";
@@ -1172,10 +1172,10 @@ inline std::ostream &operator<< (std::ostream &o, tp::IsoMessage const &b)
 inline std::ostream &operator<< (std::ostream &o, tp::CanFrame const &cf)
 {
         // TODO data.
-        o << "CanFrame id = " << cf.id << ", dlc = " << int(cf.dlc) << ", ext = " << cf.extended << ", data = [";
+        o << "CanFrame id = " << cf.id << ", dlc = " << int (cf.dlc) << ", ext = " << cf.extended << ", data = [";
 
         for (int i = 0; i < cf.dlc;) {
-                o << int(cf.data[i]);
+                o << int (cf.data[i]);
 
                 if (++i != cf.dlc) {
                         o << ",";

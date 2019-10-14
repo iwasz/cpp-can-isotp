@@ -16,6 +16,9 @@ void receivingAsyncCallback ()
 
 /**
  * TODO list:
+ * + : covered (done).
+ * - : not covered
+ *
  * + Handle ISO messages that are constrained to less than maximum 4095B allowed by the
  * ISO document.
  * - Test the above.
@@ -40,9 +43,6 @@ void receivingAsyncCallback ()
  * - Test instantiation and usage with other CanFrame type
  * - Test instantiation and usage with other IsoMessage type
  * - Test flow control.
- *
- * + : covered (done).
- * - : not covered
  *
  * ISO Specification areas
  * - Communication services (page 3):

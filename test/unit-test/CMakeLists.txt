@@ -7,6 +7,8 @@ ADD_DEFINITIONS ("-DUNIT_TEST")
 
 ENABLE_TESTING ()
 INCLUDE_DIRECTORIES("../../src/")
+INCLUDE_DIRECTORIES("../../deps/etl/include/")
+include_directories ("../../deps/GSL/include")
 
 ADD_EXECUTABLE(unit-test
     "../../src/Iso15765TransportProtocol.h"
