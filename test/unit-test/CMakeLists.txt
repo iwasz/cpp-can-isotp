@@ -6,12 +6,13 @@ SET(CMAKE_CXX_FLAGS "-std=c++17 -Wall" CACHE INTERNAL "cxx compiler flags")
 ADD_DEFINITIONS ("-DUNIT_TEST")
 
 ENABLE_TESTING ()
-INCLUDE_DIRECTORIES("../../src/")
-INCLUDE_DIRECTORIES("../../deps/etl/include/")
-include_directories ("../../deps/GSL/include")
 
 ADD_EXECUTABLE(unit-test
     "../../src/Iso15765TransportProtocol.h"
+    "../../src/CanFrame.h"
+    "../../src/Address.h"
+    "../../src/MiscTypes.h"
+    
     "00CatchInit.cc"
     "01RecvTest.cc"
     "02SendTest.cc"

@@ -7,11 +7,16 @@
  ****************************************************************************/
 
 #pragma once
+#include "Address.h"
+#include "CanFrame.h"
+#include "MiscTypes.h"
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <gsl/gsl>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <vector>
 
 /**
@@ -24,272 +29,6 @@
 #endif
 
 namespace tp {
-
-/**
- * Default CAN message API. You can use it right out of the box or you can use some
- * other class among with a wrapper which you have to provide in sych a scenario.
- * This lets you integrate this transport protocol layer with existing link protocol
- * libraries.
- */
-struct CanFrame {
-
-        CanFrame () = default;
-
-        template <typename... T>
-        CanFrame (uint32_t id, bool extended, T... t) : id (id), extended (extended), data{uint8_t (t)...}, dlc (sizeof...(t))
-        { /*add (t...);*/
-        }
-
-        //        template <typename T> void add (T t)
-        //        {
-        //                static_assert (std::is_same<T, uint8_t>::value);
-        //                data[data.size ()] = t;
-        //        }
-
-        //        template <typename T, typename... Rs> void add (T t, Rs... r)
-        //        {
-        //                static_assert (std::is_same<T, uint8_t>::value);
-        //                data[data.size ()] = t;
-        //                add (r...);
-        //        }
-
-        uint32_t id;
-        bool extended;
-        std::array<uint8_t, 8> data;
-        uint8_t dlc;
-};
-
-struct IAddress {
-        virtual ~IAddress () = default;
-
-        /// 5.3.1 Mtype
-        enum class MessageType : uint8_t {
-                DIAGNOSTICS,       /// N_SA, N_TA, N_TAtype are used
-                REMOTE_DIAGNOSTICS /// N_SA, N_TA, N_TAtype and N_AE are used
-        };
-
-        /// 5.3.2.2 N_SA encodes the network sender address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
-        virtual uint32_t getSourceAddress () const = 0;
-        virtual void setSourceAddress (uint32_t a) = 0;
-
-        /// 5.3.2.3 N_TA encodes the network target address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
-        virtual uint32_t getTargetAddress () const = 0;
-        virtual void setTargetAddress (uint32_t a) = 0;
-
-        /// N_TAtype Network Target Address Type
-        enum class TargetAddressType : uint8_t {
-                PHYSICAL,  /// 1 to 1 communiaction supported for multiple and single frame communications
-                FUNCTIONAL /// 1 to n communication (like broadcast?) is allowed only for single frame comms.
-        };
-
-        //        TargetAddressType targetAddressType;
-
-        //        /// N_AE used optionally to extend both sa and ta.
-        //        uint8_t networkAddressExtension;
-};
-
-/**
- * @brief The Address class
- */
-class Address : public IAddress {
-public:
-        Address (uint32_t ta = 0x00, uint32_t sa = 0x0) : targetAddress (ta), sourceAddress (sa) {}
-
-        /// 5.3.2.3 N_TA encodes the network target address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
-        uint32_t getTargetAddress () const override { return targetAddress; }
-        void setTargetAddress (uint32_t a) override { targetAddress = a; }
-
-        uint32_t getSourceAddress () const override { return sourceAddress; }
-        void setSourceAddress (uint32_t a) override { sourceAddress = a; }
-
-private:
-        /// 5.3.2.3 N_TA encodes the network target address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
-        uint32_t targetAddress = 0x0;
-
-        /// 5.3.2.2 N_SA encodes the network sender address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
-        uint32_t sourceAddress = 0x0;
-};
-
-template <typename CanFrameT> class NormalAddress29 : public IAddress {
-public:
-        NormalAddress29 (CanFrameT const &cf) : canFrame{cf} {}
-
-        /// 5.3.2.2 N_SA encodes the network sender address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
-        uint32_t getSourceAddress () const override { return canFrame.getId (); }
-        void setSourceAddress (uint32_t a) override
-        { /*canFrame.setId (a);*/
-        }
-
-        /// 5.3.2.3 N_TA encodes the network target address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
-        uint32_t getTargetAddress () const override { return canFrame.getId (); }
-        void setTargetAddress (uint32_t a) override
-        { /*canFrame.setId (a);*/
-        }
-
-private:
-        CanFrameT const &canFrame;
-};
-
-template <typename CanFrameT> struct NormalAddress29Resolver {
-        using AddressType = NormalAddress29<CanFrameT>;
-
-        static NormalAddress29<CanFrameT> create (CanFrameT const &f)
-        {
-                NormalAddress29 address{f};
-                return address;
-        }
-
-        static void apply (IAddress const &a, CanFrameT *f) { f->setId (a.getTargetAddress ()); }
-};
-
-/**
- * @brief The TimeProvider struct
- * TODO if I'm not mistaken, this classes ought to have 100µs resolutiuon instead of 1000.
- */
-struct ChronoTimeProvider {
-        long operator() () const
-        {
-                using namespace std::chrono;
-                system_clock::time_point now = system_clock::now ();
-                auto duration = now.time_since_epoch ();
-                return duration_cast<milliseconds> (duration).count ();
-        }
-};
-
-/**
- * Codes signaled to the user via indication and confirmation callbacks.
- */
-enum class Result {
-        // standared result codes
-        N_OK,           /// Service execution performed successfully.
-        N_TIMEOUT_A,    /// Timer N_Ar / N_As exceeded N_Asmax / N_Armax
-        N_TIMEOUT_BS,   /// N_Bs time exceeded N_Bsmax
-        N_TIMEOUT_CR,   /// N_Cr time exceeded N_Crmax
-        N_WRONG_SN,     /// Unexpected sequence number in incoming consecutive frame
-        N_INVALID_FS,   /// Invalid FlowStatus value received in flow controll frame.
-        N_UNEXP_PDU,    /// Unexpected protocol data unit received.
-        N_WFT_OVRN,     /// This signals thge user that
-        N_BUFFER_OVFLW, /// When receiving flow controll with FlowStatus = OVFLW. Transmission is aborted.
-        N_ERROR,        /// General error.
-        // implementation defined result codes
-        N_MESSAGE_NUM_MAX /// Not a standard error. This one means that there is too many different isoMessages beeing assembled from multiple
-                          /// chunks of CAN frames now.
-
-};
-
-/**
- * @brief The InfiniteLoop struct
- */
-struct InfiniteLoop {
-        [[noreturn]] void operator() (/*Error*/)
-        {
-                while (true) {
-                }
-        }
-};
-
-/**
- * @brief The EmptyCallback struct
- */
-struct EmptyCallback {
-        template <typename... T>[[noreturn]] void operator() (T...) {}
-};
-
-/**
- * This interface assumes that sending single CAN frame is instant and we
- * now the status (whether it failed or succeeded) instantly (thus boolean)
- * return type.
- *
- * Important! If this interface fails, it shoud return false. Also, ISO requires,
- * that sending a CAN message shoud take not more as 1000ms + 50% i.e. 1500ms. If
- * this interface detects (internally) that, this time constraint wasn't met, it
- * also should return false. Those are N_As and N_Ar timeouts.
- */
-struct LinuxCanOutputInterface {
-        bool operator() (CanFrame const &) { return true; }
-};
-
-struct CoutPrinter {
-        template <typename T> void operator() (T &&a) { std::cout << std::forward<T> (a) << std::endl; }
-};
-
-/// NPDU -> Network Protocol Data Unit
-enum class IsoNPduType { SINGLE_FRAME = 0, FIRST_FRAME = 1, CONSECUTIVE_FRAME = 2, FLOW_FRAME = 3 };
-
-template <typename CanMessageT> struct CanMessageWrapperBase {
-};
-
-template <> class CanMessageWrapperBase<CanFrame> {
-public:
-        explicit CanMessageWrapperBase (CanFrame const &cf) : frame (cf) {} /// Construct from underlying implementation type.
-        template <typename... T> CanMessageWrapperBase (uint32_t id, bool extended, T... data) : frame (id, extended, data...) {}
-
-        template <typename... T> static CanFrame create (uint32_t id, bool extended, T... data) { return CanFrame{id, extended, data...}; }
-
-        CanFrame const &value () const { return frame; } /// Transform to underlying implementation type.
-
-        uint32_t getId () const { return frame.id; } /// Arbitration id.
-        void setId (uint32_t i) { frame.id = i; }    /// Arbitration id.
-
-        bool isExtended () const { return frame.extended; }
-        void setExtended (bool b) { frame.extended = b; }
-
-        uint8_t getDlc () const { return frame.dlc; }
-        void setDlc (uint8_t d) { frame.dlc = d; }
-
-        uint8_t get (size_t i) const { return frame.data[i]; }
-        void set (size_t i, uint8_t b) { frame.data[i] = b; }
-
-private:
-        // TODO this should be some kind of handler if we wantto call this class a "wrapper".
-        // This way we would get rid of one copy during reception of a CAN frame.
-        // But at the other hand there must be a possibility to create new "wrappers" withgout
-        // providing the internal object when sending frames.
-        CanFrame frame;
-};
-
-/// FS field in Flow Control Frame
-enum class FlowStatus { CONTINUE_TO_SEND = 0, WAIT = 1, OVERFLOW = 2 };
-
-template <typename CanFrameT> class CanMessageWrapper : public CanMessageWrapperBase<CanFrameT> {
-public:
-        using CanMessageWrapperBase<CanFrameT>::CanMessageWrapperBase;
-        using Base = CanMessageWrapperBase<CanFrameT>;
-
-        /*---------------------------------------------------------------------------*/
-
-        template <typename... T> static CanFrame create (uint32_t id, bool extended, T... data) { return CanFrame{id, extended, data...}; }
-
-        // TODO implement
-        bool isCanExtAddrActive () const { return false; }
-
-        uint8_t getNPciOffset () const { return (isCanExtAddrActive ()) ? (1) : (0); }
-
-        uint8_t getNPciByte () const { return Base::get (getNPciOffset ()); }
-        IsoNPduType getType () const { return getType (*this); }
-        static IsoNPduType getType (CanMessageWrapper const &f) { return IsoNPduType ((f.getNPciByte () & 0xF0) >> 4); }
-
-        static bool isCanExtAddrActive (CanFrame const &f) { return false; }
-        static IsoNPduType getType (CanFrame const &f) { return IsoNPduType ((f.data[(isCanExtAddrActive (f)) ? (1) : (0)] & 0xF0) >> 4); }
-
-        /*---------------------------------------------------------------------------*/
-
-        // Not the cleanest way of doning this, but it's a internal class. Maybe someday...
-        uint8_t getDataLengthS () const { return getNPciByte () & 0x0f; }
-
-        uint16_t getDataLengthF () const { return ((getNPciByte () & 0x0f) << 8) | Base::get (getNPciOffset () + 1); }
-
-        uint8_t getSerialNumber () const { return getNPciByte () & 0x0f; }
-
-        FlowStatus getFlowStatus () const { return FlowStatus (getNPciByte () & 0x0f); }
-        uint8_t getBlockSize () const { return get (getNPciOffset () + 1); }
-        uint8_t getSeparationTime () const { return get (getNPciOffset () + 2); }
-};
-
-/**
- * Buffer for all input and ouptut operations
- */
-using IsoMessage = std::vector<uint8_t>;
 
 template <typename CanFrameT, typename IsoMessageT, size_t MAX_MESSAGE_SIZE_T, typename AddressResolverT, typename CanOutputInterfaceT,
           typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
@@ -375,8 +114,8 @@ public:
          */
         bool send (Address const &a, IsoMessageT &&msg);
 
-        bool send (IsoMessageT const &msg) { send (defaultAddress, msg); }
-        bool send (IsoMessageT &&msg) { send (defaultAddress, msg); }
+        bool send (IsoMessageT const &msg) { return send (defaultAddress, msg); }
+        bool send (IsoMessageT &&msg) { return send (defaultAddress, msg); }
 
         /**
          * Does the book keeping (checks for timeouts, runs the sending state machine).
@@ -400,18 +139,19 @@ public:
          * może być SingleFrame, albo FF + x * CF, ale dało się określić koniec tej wiadomości.
          * Kiedy wykryło koniec, to kończyło działanie ignorując ewentualne inne wiadomości.
          * Asynchroniczne API naprawia ten problem.
-         */
-        /**
+         *
          * Składa wiadomość ISO z poszczególnych ramek CAN. Zwraca czy potrzeba więcej ramek can aby
          * złożyć wiadomość ISO w całości. Kiedy podamy obiekt wiadomości jako drugi parametr, to
          * nie wywołuje callbacku, tylko zapisuje wynik w tym obiekcie. To jest używane w connect.
-         *
          */
         bool onCanNewFrame (CanMessage const &f) { return onCanNewFrame (CanMessageWrapperType{f}); }
 
         /*---------------------------------------------------------------------------*/
 
+        /// Can Ext Addr setter
         void setCanExtAddr (uint8_t u);
+
+        /// Can Ext Addr getter
         uint8_t getCanExtAddr () const { return canExtAddr; }
         bool isCanExtAddrActive () const { return canExtAddrActive; }
 
@@ -557,7 +297,7 @@ private:
                 uint16_t blocksSent = 0;
                 uint8_t sequenceNumber = 1;
                 uint8_t blockSize = 0;
-                uint16_t separationTimeUs = 0;
+                uint32_t separationTimeUs = 0;
                 Timer separationTimer;
                 Timer bsCrTimer;
                 uint8_t waitFrameNumber = 0;
@@ -565,9 +305,9 @@ private:
 
         /*---------------------------------------------------------------------------*/
 
-        void confirm (IAddress const &a, Result r) {}
-        void firstFrameIndication (IAddress const &a, uint16_t len) {}
-        void indication (IAddress const &a, IsoMessageT const &msg, Result r) { callback (msg); /*TODO tidy up this mess with callbacks*/ }
+        void confirm (Address const &a, Result r) {}
+        void firstFrameIndication (Address const &a, uint16_t len) {}
+        void indication (Address const &a, IsoMessageT const &msg, Result r) { callback (msg); /*TODO tidy up this mess with callbacks*/ }
 
         /*---------------------------------------------------------------------------*/
 
@@ -594,9 +334,8 @@ private:
 /*****************************************************************************/
 
 template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, size_t MAX_MESSAGE_SIZE = 4095,
-          typename AddressResolverT = NormalAddress29Resolver<CanMessageWrapper<CanFrameT>>,
-          typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = ChronoTimeProvider,
-          typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
+          typename AddressResolverT = NormalAddress29Resolver, typename CanOutputInterfaceT = LinuxCanOutputInterface,
+          typename TimeProviderT = ChronoTimeProvider, typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
 TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT, TimeProviderT,
                                           ErrorHandlerT, CallbackT>>
 create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ErrorHandlerT errorHandler = {})
@@ -618,10 +357,9 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
                 return sendSingleFrame (a, msg);
         }
-        else { // Send using multiple frames, state machine, and timing controll and whatnot.
-                return sendMultipleFrames (a, msg);
-        }
 
+        // Send using multiple frames, state machine, and timing controll and whatnot.
+        return sendMultipleFrames (a, msg);
         return true;
 }
 
@@ -639,9 +377,9 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
                 return sendSingleFrame (a, msg);
         }
-        else { // Send using multiple frames, state machine, and timing controll and whatnot.
-                return sendMultipleFrames (a, msg);
-        }
+
+        // Send using multiple frames, state machine, and timing controll and whatnot.
+        return sendMultipleFrames (a, msg);
 
         return true;
 }
@@ -651,7 +389,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (const Address &a, IsoMessageT const &msg)
 {
         CanMessageWrapperType canFrame{0x00, true, int (IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f)};
-        AddressResolver::apply (a, &canFrame);
+        AddressResolver::apply (a, canFrame);
 
         for (size_t i = 0; i < msg.size (); ++i) {
                 canFrame.set (i + 1, msg.at (i));
@@ -681,7 +419,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &frame)
 {
         // Address as received in the CAN frame frame.
-        typename AddressResolver::AddressType incomingAddress = AddressResolver::create (frame);
+        Address incomingAddress = AddressResolver::create (frame);
         // TODO I'm replacing tagret and source addresess here. I don't know if that's OK.
         // Address outgoingAddress (incomingAddress.getSourceAddress (), incomingAddress.getTargetAddress ());
         Address outgoingAddress = defaultAddress;
@@ -881,7 +619,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendFlowFrame (Addr
 #endif
 
         CanMessageWrapperType fcCanFrame (0, false, (uint8_t (IsoNPduType::FLOW_FRAME) << 4) | uint8_t (fs));
-        AddressResolver::apply (outgoingAddress, &fcCanFrame);
+        AddressResolver::apply (outgoingAddress, fcCanFrame);
         fcCanFrame.set (1, 0); // BS
         fcCanFrame.set (2, 0); // Stmin
         fcCanFrame.setDlc (3);
@@ -1013,7 +751,8 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 // TODO addressing
                 CanMessageWrapperType canFrame (0x00, false, (int (IsoNPduType::FIRST_FRAME) << 4) | (isoMessageSize & 0xf00) >> 8,
                                                 (isoMessageSize & 0x0ff));
-                AddressResolver::apply (address, &canFrame);
+
+                AddressResolver::apply (address, canFrame);
 
                 int toSend = std::min<int> (isoMessageSize, 6);
                 for (int i = 0; i < toSend; ++i) {
@@ -1047,7 +786,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 auto addressRx = AddressResolver::create (*frame);
 
                 // TODO I don't know if thaths OK:
-                if (addressRx.getTargetAddress () != address.getSourceAddress ()) {
+                if (addressRx.targetAddress != address.sourceAddress) {
                         break;
                 }
 
@@ -1110,7 +849,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 }
 
                 CanMessageWrapperType canFrame (0x00, true, (int (IsoNPduType::CONSECUTIVE_FRAME) << 4) | sequenceNumber);
-                AddressResolver::apply (address, &canFrame);
+                AddressResolver::apply (address, canFrame);
 
                 ++sequenceNumber;
                 sequenceNumber %= 16;
