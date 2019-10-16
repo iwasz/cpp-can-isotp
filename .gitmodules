@@ -4,3 +4,6 @@
 [submodule "deps/GSL"]
 	path = deps/GSL
 	url = git@github.com:microsoft/GSL.git
+[submodule "deps/fmt"]
+	path = deps/fmt
+	url = git@github.com:fmtlib/fmt.git
