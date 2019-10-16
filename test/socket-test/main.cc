@@ -6,6 +6,7 @@
  *  ~~~~~~~~~                                                               *
  ****************************************************************************/
 
+#include "LinuxCanFrame.h"
 #include "TransportProtocol.h"
 #include <algorithm>
 #include <cstdint>
@@ -18,13 +19,16 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
-int main ()
+/**
+ * Starts listening on a CAN_FD socket.
+ */
+template <typename C> void listen (C callback)
 {
         int socketFd = socket (PF_CAN, SOCK_RAW, CAN_RAW);
 
         if (socketFd < 0) {
                 fmt::print ("Error creating the socket\n");
-                return 1;
+                return;
         }
 
         sockaddr_can addr{};
@@ -33,7 +37,7 @@ int main ()
 
         if (bind (socketFd, (struct sockaddr *)&addr, sizeof (addr)) < 0) {
                 perror ("bind");
-                return 1;
+                return;
         }
 
         /* these settings are static and can be held out of the hot path */
@@ -77,23 +81,28 @@ int main ()
                                 }
 
                                 fmt::print ("Error during read\n");
-                                return 1;
+                                return;
                         }
 
-                        // fprint_long_canframe (stdout, &frame, NULL, view, maxdlen);
-                        fmt::print ("CanFrame Id : {}, dlc : {}, data[0] = {}\n", frame.can_id, frame.len, frame.data[0]);
+                        callback (frame);
                 }
         }
+}
 
-        /*--------------------------------------------------------------------------*/
+/****************************************************************************/
 
-        auto tp = tp::create ([] (auto const &tm) { std::cout << "TransportMessage : " << tm; },
-                              [] (auto const &canFrame) {
-                                      std::cout << "CAN Tx : " << canFrame << std::endl;
-                                      return true;
-                              },
-                              tp::ChronoTimeProvider{}, [] (auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
+int main ()
+{
+        auto tp = tp::create<canfd_frame> (
+                [] (auto const &tm) { std::cout << "TransportMessage : " << tm; },
+                [] (auto const &frame) {
+                        fmt::print ("Transmitting frame Id : {}, dlc : {}, data[0] = {}\n", frame.can_id, frame.len, frame.data[0]);
+                        return true;
+                },
+                tp::ChronoTimeProvider{}, [] (auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
 
-        // Asynchronous - callback API
-        tp.onCanNewFrame (tp::CanFrame (0x00, true, 1, 0x01, 0x67));
+        listen ([&tp] (auto const &frame) {
+                fmt::print ("Received frame Id : {}, dlc : {}, data[0] = {}\n", frame.can_id, frame.len, frame.data[0]);
+                tp.onCanNewFrame (frame);
+        });
 }
