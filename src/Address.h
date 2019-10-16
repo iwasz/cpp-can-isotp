@@ -56,6 +56,10 @@ struct Address {
 
         /// 5.3.2.4
         TargetAddressType targetAddressType{};
+
+        /// TODO remove
+        uint32_t txId{}; // This is a Normal_29 tx CAN ID
+        uint32_t rxId{}; // This is a Normal_29 rx CAN ID
 };
 
 inline Address normal11Address (uint8_t sa, uint8_t ta, Address::MessageType mt = Address::MessageType::DIAGNOSTICS,
@@ -64,22 +68,23 @@ inline Address normal11Address (uint8_t sa, uint8_t ta, Address::MessageType mt 
         return Address (Address::Type::NORMAL_11, ta, sa, 0x00, mt, tat);
 }
 
-inline Address normal29Address (uint8_t sa, uint8_t ta, Address::MessageType mt = Address::MessageType::DIAGNOSTICS,
-                                Address::TargetAddressType tat = Address::TargetAddressType::PHYSICAL)
+inline Address normal29Address (uint32_t txId, uint32_t rxId)
 {
-        return Address (Address::Type::NORMAL_29, ta, sa, 0x00, mt, tat);
+        // return Address (Address::Type::NORMAL_29, ta, sa, 0x00, mt, tat);
+        auto a = Address ();
+        a.addressType = Address::Type::EXTENDED_29;
+        a.txId = txId;
+        a.rxId = rxId;
+        return a;
 }
 
 struct NormalAddress29Resolver {
 
-        template <typename CanFrameWrapper> static Address create (CanFrameWrapper const &f)
-        {
-                Address address;
-                address.addressType = Address::Type::NORMAL_29;
-                return address;
-        }
+        /// Create from RX frame
+        template <typename CanFrameWrapper> static Address create (CanFrameWrapper const &f) { return normal29Address (0x00, f.getId ()); }
 
-        template <typename CanFrameWrapper> static void apply (Address const &a, CanFrameWrapper &f) { f.setId (a.targetAddress); }
+        /// Apply to TX frame
+        template <typename CanFrameWrapper> static void apply (Address const &a, CanFrameWrapper &f) { f.setId (a.txId); }
 };
 
 } // namespace tp

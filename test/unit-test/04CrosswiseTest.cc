@@ -6,7 +6,7 @@
  *  ~~~~~~~~~                                                               *
  ****************************************************************************/
 
-#include "Iso15765TransportProtocol.h"
+#include "TransportProtocol.h"
 #include "catch.hpp"
 #include <vector>
 
@@ -21,9 +21,9 @@ TEST_CASE ("cross half-duplex 1B", "[crosswise]")
                         REQUIRE (isoMessage.size () == 1);
                         REQUIRE (isoMessage[0] == 0x55);
                 },
-                [] (auto &&canFrame) { return true; });
+                [] (auto && /* canFrame */) { return true; });
 
-        auto tpT = create ([] (auto &&) {},
+        auto tpT = create ([] (auto && /*unused*/) {},
                            [&tpR] (auto &&canFrame) {
                                    tpR.onCanNewFrame (canFrame);
                                    return true;

@@ -9,7 +9,8 @@ if(COMMAND cmake_policy)
 endif(COMMAND cmake_policy)
 
 PROJECT (cpp-can-isotp)
-INCLUDE_DIRECTORIES("src" "deps/GSL/include" "deps/etl/include")
+INCLUDE_DIRECTORIES("src" "deps/GSL/include" "deps/etl/include" "deps/fmt/include")
 add_subdirectory (test/example)
 add_subdirectory (test/unit-test)
+add_subdirectory (test/socket-test)
 

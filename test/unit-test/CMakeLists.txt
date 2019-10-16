@@ -8,7 +8,7 @@ ADD_DEFINITIONS ("-DUNIT_TEST")
 ENABLE_TESTING ()
 
 ADD_EXECUTABLE(unit-test
-    "../../src/Iso15765TransportProtocol.h"
+    "../../src/TransportProtocol.h"
     "../../src/CanFrame.h"
     "../../src/Address.h"
     "../../src/MiscTypes.h"

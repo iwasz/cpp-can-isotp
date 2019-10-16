@@ -6,7 +6,7 @@
  *  ~~~~~~~~~                                                               *
  ****************************************************************************/
 
-#include "Iso15765TransportProtocol.h"
+#include "TransportProtocol.h"
 #include "catch.hpp"
 
 using namespace tp;

@@ -6,7 +6,7 @@
  *  ~~~~~~~~~                                                               *
  ****************************************************************************/
 
-#include "Iso15765TransportProtocol.h"
+#include "TransportProtocol.h"
 #include "catch.hpp"
 
 using namespace tp;
@@ -14,7 +14,7 @@ using namespace tp;
 TEST_CASE ("rx 1B", "[reception]")
 {
         bool called = false;
-        auto tp = create ([&called](auto &&tm) {
+        auto tp = create ([&called] (auto &&tm) {
                 called = true;
                 REQUIRE (tm.size () == 1);
                 REQUIRE (tm[0] == 0x67);
@@ -27,7 +27,7 @@ TEST_CASE ("rx 1B", "[reception]")
 TEST_CASE ("rx 7B", "[reception]")
 {
         bool called = false;
-        auto tp = create ([&called](auto &&tm) {
+        auto tp = create ([&called] (auto &&tm) {
                 called = true;
                 REQUIRE (tm.size () == 7);
                 REQUIRE (tm[0] == 0);
@@ -48,7 +48,7 @@ TEST_CASE ("rx 8B", "[reception]")
         bool called = false;
         bool flow = false;
         auto tp = create (
-                [&called](auto &&tm) {
+                [&called] (auto &&tm) {
                         called = true;
                         REQUIRE (tm.size () == 8);
                         REQUIRE (tm[0] == 0);
@@ -60,7 +60,7 @@ TEST_CASE ("rx 8B", "[reception]")
                         REQUIRE (tm[6] == 6);
                         REQUIRE (tm[7] == 7);
                 },
-                [&flow](auto &&canFrame) {
+                [&flow] (auto &&canFrame) {
                         flow = true;
                         REQUIRE (true);
                         return true;
@@ -78,7 +78,7 @@ TEST_CASE ("rx 13B", "[reception]")
         bool called = false;
         bool flow = false;
         auto tp = create (
-                [&called](auto &&tm) {
+                [&called] (auto &&tm) {
                         called = true;
                         REQUIRE (tm.size () == 13);
                         REQUIRE (tm[0] == 0);
@@ -95,7 +95,7 @@ TEST_CASE ("rx 13B", "[reception]")
                         REQUIRE (tm[11] == 11);
                         REQUIRE (tm[12] == 12);
                 },
-                [&flow](auto &&canFrame) {
+                [&flow] (auto &&canFrame) {
                         flow = true;
                         REQUIRE (canFrame.data[0] == 0x30);
                         return true;
@@ -115,7 +115,7 @@ TEST_CASE ("rx 4095B", "[reception]")
         bool flow = false;
 
         auto tp = create (
-                [&called](auto &&tm) {
+                [&called] (auto &&tm) {
                         called = true;
                         REQUIRE (tm.size () == 4095);
                         REQUIRE (tm[0] == 0);
@@ -142,7 +142,7 @@ TEST_CASE ("rx 4095B", "[reception]")
                         REQUIRE (tm[4093] == 253);
                         REQUIRE (tm[4094] == 254);
                 },
-                [&flow](auto &&canFrame) {
+                [&flow] (auto &&canFrame) {
                         flow = true;
                         REQUIRE (canFrame.data[0] == 0x30);
                         return true;

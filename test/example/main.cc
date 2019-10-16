@@ -1,14 +1,22 @@
-#include "Iso15765TransportProtocol.h"
+/****************************************************************************
+ *                                                                          *
+ *  Author : lukasz.iwaszkiewicz@gmail.com                                  *
+ *  ~~~~~~~~                                                                *
+ *  License : see COPYING file for details.                                 *
+ *  ~~~~~~~~~                                                               *
+ ****************************************************************************/
+
+#include "TransportProtocol.h"
 #include <iostream>
 
 void receivingAsyncCallback ()
 {
-        auto tp = tp::create ([](auto &&tm) { std::cout << "TransportMessage : " << tm; },
-                              [](auto &&canFrame) {
+        auto tp = tp::create ([] (auto &&tm) { std::cout << "TransportMessage : " << tm; },
+                              [] (auto &&canFrame) {
                                       std::cout << "CAN Tx : " << canFrame << std::endl;
                                       return true;
                               },
-                              tp::ChronoTimeProvider{}, [](auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
+                              tp::ChronoTimeProvider{}, [] (auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
 
         // Asynchronous - callback API
         tp.onCanNewFrame (tp::CanFrame (0x00, true, 1, 0x01, 0x67));
@@ -31,7 +39,7 @@ void receivingAsyncCallback ()
  * TODO test this api with std::threads.
  * + implement FF parameters : BS and STime
  * TODO verify with the ISO pdf whether everything is implemented.
- * TODO Redesign API - I (as a user) hate beeing forced to provide dozens of arguyments upon
+ * TODO Redesign API - I (as a user) hate being forced to provide dozens of arguyments upon
  * construction that I don't really care about and do not use them. In this particular case
  * my biggest concern is the create function and callbacks that it takes.
  * + implement all enums that can be found in the ISO document.
