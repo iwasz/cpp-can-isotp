@@ -335,10 +335,10 @@ private:
 
 template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, size_t MAX_MESSAGE_SIZE = 4095,
           typename AddressResolverT = NormalAddress29Resolver, typename CanOutputInterfaceT = LinuxCanOutputInterface,
-          typename TimeProviderT = ChronoTimeProvider, typename ErrorHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
+          typename TimeProviderT = ChronoTimeProvider, typename ExceptionHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
 TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT, TimeProviderT,
-                                          ErrorHandlerT, CallbackT>>
-create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ErrorHandlerT errorHandler = {})
+                                          ExceptionHandlerT, CallbackT>>
+create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ExceptionHandlerT errorHandler = {})
 {
         return {callback, outputInterface, timeProvider, errorHandler};
 }
