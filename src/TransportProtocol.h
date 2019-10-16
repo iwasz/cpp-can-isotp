@@ -19,6 +19,8 @@
 #include <optional>
 #include <vector>
 
+#include <fmt/format.h>
+
 /**
  * Set maximum number of Flow Control frames with WAIT bit set that can be received
  * before aborting further transmission of pending message. Check paragraph 6.6 of ISO
@@ -92,6 +94,17 @@ public:
         {
         }
 
+        TransportProtocol (Address myAddress, Callback callback, CanOutputInterface outputInterface = {}, TimeProvider /*timeProvider*/ = {},
+                           ErrorHandler errorHandler = {})
+            : myAddress (myAddress),
+              stack{errorHandler},
+              callback{callback},
+              outputInterface{outputInterface},
+              //              timeProvider{ timeProvider },
+              errorHandler{errorHandler}
+        {
+        }
+
         TransportProtocol (TransportProtocol const &) = delete;
         TransportProtocol (TransportProtocol &&) = delete;
         TransportProtocol &operator= (TransportProtocol const &) = delete;
@@ -114,8 +127,8 @@ public:
          */
         bool send (Address const &a, IsoMessageT &&msg);
 
-        bool send (IsoMessageT const &msg) { return send (defaultAddress, msg); }
-        bool send (IsoMessageT &&msg) { return send (defaultAddress, msg); }
+        bool send (IsoMessageT const &msg) { return send (myAddress, msg); }
+        bool send (IsoMessageT &&msg) { return send (myAddress, msg); }
 
         /**
          * Does the book keeping (checks for timeouts, runs the sending state machine).
@@ -163,8 +176,8 @@ public:
          * - defaultAddress.targetAddress is used for outgoing frames if no address was specified during request (in send method).
          * - defaultAddress.sourceAddress is checked with incoming flowFrames if no address was specified during request (in send method).
          */
-        void setDefaultAddress (Address const &a) { defaultAddress = a; }
-        Address const &getDefaultAddress () const { return defaultAddress; }
+        void setMyAddress (Address const &a) { myAddress = a; }
+        Address const &getDefaultAddress () const { return myAddress; }
 
 private:
         static uint32_t now ()
@@ -270,12 +283,12 @@ private:
                         DONE
                 };
 
-                StateMachine (CanOutputInterface &o, const Address &a, IsoMessageT const &m) : outputInterface (o), address (a), message (m) {}
-                StateMachine (CanOutputInterface &o, const Address &a, IsoMessageT &&m) : outputInterface (o), address (a), message (m) {}
+                StateMachine (CanOutputInterface &o, const Address &a, IsoMessageT const &m) : outputInterface (o), myAddress (a), message (m) {}
+                StateMachine (CanOutputInterface &o, const Address &a, IsoMessageT &&m) : outputInterface (o), myAddress (a), message (m) {}
                 ~StateMachine () = default;
 
-                StateMachine (StateMachine &&sm) noexcept = default;
-                StateMachine &operator= (StateMachine &&sm) noexcept = default;
+                StateMachine (StateMachine &&sm) noexcept = delete;
+                StateMachine &operator= (StateMachine &&sm) noexcept = delete;
 
                 StateMachine (StateMachine const &sm) noexcept : message{sm.message}, state{sm.state} {}
                 StateMachine &operator= (StateMachine const &sm) noexcept
@@ -290,7 +303,7 @@ private:
 
         private:
                 CanOutputInterface &outputInterface;
-                Address address;
+                Address myAddress;
                 IsoMessageT message;
                 State state = State::IDLE;
                 size_t bytesSent = 0;
@@ -312,7 +325,7 @@ private:
         /*---------------------------------------------------------------------------*/
 
         uint32_t getID (bool extended) const;
-        bool sendFlowFrame (const Address &ouytgoingAddress, FlowStatus fs = FlowStatus::CONTINUE_TO_SEND);
+        bool sendFlowFrame (const Address &outgoingAddress, FlowStatus fs = FlowStatus::CONTINUE_TO_SEND);
         bool sendSingleFrame (const Address &a, IsoMessageT const &msg);
         bool sendMultipleFrames (const Address &a, IsoMessageT const &msg);
         bool sendMultipleFrames (const Address &a, IsoMessageT &&msg);
@@ -328,7 +341,7 @@ private:
         CanOutputInterface outputInterface;
         ErrorHandler errorHandler;
         std::optional<StateMachine> stateMachine;
-        Address defaultAddress;
+        Address myAddress;
 };
 
 /*****************************************************************************/
@@ -389,7 +402,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (const Address &a, IsoMessageT const &msg)
 {
         CanMessageWrapperType canFrame{0x00, true, int (IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f)};
-        AddressResolver::apply (a, canFrame);
+        AddressResolver::toFrame (a, canFrame);
 
         for (size_t i = 0; i < msg.size (); ++i) {
                 canFrame.set (i + 1, msg.at (i));
@@ -419,10 +432,10 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &frame)
 {
         // Address as received in the CAN frame frame.
-        Address incomingAddress = AddressResolver::create (frame);
+        Address theirsAddress = AddressResolver::fromFrame (frame);
         // TODO I'm replacing tagret and source addresess here. I don't know if that's OK.
         // Address outgoingAddress (incomingAddress.getSourceAddress (), incomingAddress.getTargetAddress ());
-        Address outgoingAddress = defaultAddress;
+        Address const &outgoingAddress = myAddress;
 
         switch (frame.getType ()) {
         case IsoNPduType::SINGLE_FRAME: {
@@ -441,7 +454,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         // As in 6.7.3 Table 18
                         // TODO this API is inefficient, we create empty IsoMessageT objecyt (which possibly can allocate as much as 4095B) only
                         // to discard it.
-                        indication (incomingAddress, {}, Result::N_UNEXP_PDU);
+                        indication (theirsAddress, {}, Result::N_UNEXP_PDU);
                         // Terminate the current reception of segmented message.
                         stack.removeMessage (isoMessage);
                         break;
@@ -449,7 +462,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 uint8_t dataOffset = frame.getNPciOffset () + 1;
                 message.append (frame, dataOffset, singleFrameLen);
-                indication (incomingAddress, message.data, Result::N_OK);
+                indication (theirsAddress, message.data, Result::N_OK);
         } break;
 
         case IsoNPduType::FIRST_FRAME: {
@@ -467,11 +480,12 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 }
 
                 // TODO Proper addressing should be used.
+                // incomingAddress Should be used!
                 TransportMessage *isoMessage = stack.findMessage (frame.getId ());
 
                 if (isoMessage) {
                         // As in 6.7.3 Table 18
-                        indication (incomingAddress, {}, Result::N_UNEXP_PDU);
+                        indication (theirsAddress, {}, Result::N_UNEXP_PDU);
                         // Terminate the current reception of segmented message.
                         stack.removeMessage (isoMessage);
                 }
@@ -480,11 +494,11 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 isoMessage = stack.addMessage (frame.getId () /*, multiFrameRemainingLen*/);
 
                 if (!isoMessage) {
-                        indication (incomingAddress, {}, Result::N_MESSAGE_NUM_MAX);
+                        indication (theirsAddress, {}, Result::N_MESSAGE_NUM_MAX);
                         return false;
                 }
 
-                firstFrameIndication (incomingAddress, multiFrameRemainingLen);
+                firstFrameIndication (theirsAddress, multiFrameRemainingLen);
 
                 isoMessage->currentSn = 1;
                 isoMessage->multiFrameRemainingLen = multiFrameRemainingLen - firstFrameLen;
@@ -494,7 +508,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 // Send Flow Control
                 if (!sendFlowFrame (outgoingAddress, FlowStatus::CONTINUE_TO_SEND)) {
-                        indication (incomingAddress, {}, Result::N_ERROR);
+                        indication (theirsAddress, {}, Result::N_ERROR);
                         // Terminate the current reception of segmented message.
                         stack.removeMessage (isoMessage);
                 }
@@ -514,7 +528,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 if (frame.getSerialNumber () != isoMessage->currentSn) {
                         // 6.5.4.3 SN error handling
-                        indication (incomingAddress, {}, Result::N_WRONG_SN);
+                        indication (theirsAddress, {}, Result::N_WRONG_SN);
                         return false;
                 }
 
@@ -523,6 +537,9 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 int maxConsecutiveFrameLen = (isCanExtAddrActive ()) ? (6) : (7);
                 int consecutiveFrameLen = std::min (maxConsecutiveFrameLen, isoMessage->multiFrameRemainingLen);
                 isoMessage->multiFrameRemainingLen -= consecutiveFrameLen;
+#if 0                
+                fmt::print ("Bytes left : {}\n", isoMessage->multiFrameRemainingLen);
+#endif
 
                 uint8_t dataOffset = frame.getNPciOffset () + 1;
                 isoMessage->append (frame, dataOffset, consecutiveFrameLen);
@@ -530,10 +547,9 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 if (isoMessage->multiFrameRemainingLen) {
                         return true;
                 }
-                else {
-                        indication (incomingAddress, isoMessage->data, Result::N_OK);
-                        stack.removeMessage (isoMessage);
-                }
+
+                indication (theirsAddress, isoMessage->data, Result::N_OK);
+                stack.removeMessage (isoMessage);
 
         } break;
 
@@ -618,8 +634,9 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendFlowFrame (Addr
         }
 #endif
 
-        CanMessageWrapperType fcCanFrame (0, false, (uint8_t (IsoNPduType::FLOW_FRAME) << 4) | uint8_t (fs));
-        AddressResolver::apply (outgoingAddress, fcCanFrame);
+        CanMessageWrapperType fcCanFrame;
+        AddressResolver::toFrame (outgoingAddress, fcCanFrame);
+        fcCanFrame.set (0, (uint8_t (IsoNPduType::FLOW_FRAME) << 4) | uint8_t (fs));
         fcCanFrame.set (1, 0); // BS
         fcCanFrame.set (2, 0); // Stmin
         fcCanFrame.setDlc (3);
@@ -752,7 +769,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 CanMessageWrapperType canFrame (0x00, false, (int (IsoNPduType::FIRST_FRAME) << 4) | (isoMessageSize & 0xf00) >> 8,
                                                 (isoMessageSize & 0x0ff));
 
-                AddressResolver::apply (address, canFrame);
+                AddressResolver::toFrame (myAddress, canFrame);
 
                 int toSend = std::min<int> (isoMessageSize, 6);
                 for (int i = 0; i < toSend; ++i) {
@@ -783,10 +800,10 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 }
 
                 // Address as received in the CAN frame frame.
-                auto addressRx = AddressResolver::create (*frame);
+                auto theirsAddress = AddressResolver::fromFrame (*frame);
 
                 // TODO I don't know if thaths OK:
-                if (addressRx.targetAddress != address.sourceAddress) {
+                if (theirsAddress.remoteAddress != myAddress.localAddress) {
                         break;
                 }
 
@@ -849,7 +866,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 }
 
                 CanMessageWrapperType canFrame (0x00, true, (int (IsoNPduType::CONSECUTIVE_FRAME) << 4) | sequenceNumber);
-                AddressResolver::apply (address, canFrame);
+                AddressResolver::toFrame (myAddress, canFrame);
 
                 ++sequenceNumber;
                 sequenceNumber %= 16;

@@ -17,6 +17,8 @@
 #include <gsl/gsl>
 #include <iostream>
 #include <linux/can.h>
+#include <linux/can/raw.h>
+#include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -34,7 +36,22 @@ int createSocket ()
 
         sockaddr_can addr{};
         addr.can_family = AF_CAN;
-        addr.can_ifindex = 0; // Any can interface. I assume there is only one.
+        // addr.can_ifindex = 0; // Any can interface. I assume there is only one.
+        //
+
+        ifreq ifr{};
+        strncpy (ifr.ifr_name, "slcan0", IFNAMSIZ - 1);
+        ifr.ifr_name[IFNAMSIZ - 1] = '\0';
+        ifr.ifr_ifindex = if_nametoindex (ifr.ifr_name);
+
+        if (!ifr.ifr_ifindex) {
+                fmt::print ("Error during if_nametoindex\n");
+                return -1;
+        }
+
+        addr.can_ifindex = ifr.ifr_ifindex;
+
+        // setsockopt (socketFd, SOL_CAN_RAW, CAN_RAW_FILTER, NULL, 0);
 
         if (bind (socketFd, (struct sockaddr *)&addr, sizeof (addr)) < 0) {
                 fmt::print ("Error during bind\n");
@@ -53,7 +70,7 @@ template <typename C> void listenSocket (int socketFd, C callback)
         iovec iov{};
         msghdr msg{};
 
-        canfd_frame frame{};
+        can_frame frame{};
         iov.iov_base = &frame;
         // msg.msg_name = &addr;
         msg.msg_iov = &iov;
@@ -98,31 +115,46 @@ template <typename C> void listenSocket (int socketFd, C callback)
 
 /****************************************************************************/
 
-int sendSocket (int socketFd, canfd_frame const &frame)
+int sendSocket (int socketFd, can_frame const &frame)
 {
-        int bytesToSend = int (sizeof (frame)) - (8 - frame.len);
-        return write (socketFd, &frame, bytesToSend);
+        int bytesToSend = int (sizeof (frame)); // CAN_MTU
+        int bytesActuallySent = ::write (socketFd, &frame, bytesToSend);
+        return (bytesActuallySent == bytesToSend);
 }
 
 /****************************************************************************/
 
 int main ()
 {
+        using namespace tp;
+
         int socketFd = createSocket ();
 
-        auto tp = tp::create<canfd_frame> (
-                [] (auto const &tm) { std::cout << "TransportMessage : " << tm; },
+        auto tp = create<can_frame> (
+                [] (auto const &tm) {
+                        std::transform (std::begin (tm), std::end (tm), std::ostream_iterator<char> (std::cout), [] (auto b) {
+                                static_assert (std::is_same<decltype (b), uint8_t>::value);
+                                return char (b);
+                        });
+
+                        std::cout << std::endl;
+                },
                 [socketFd] (auto const &frame) {
-                        sendSocket (socketFd, frame);
-                        fmt::print ("Transmitting frame Id : {:x}, dlc : {}, data[0] = {}\n", frame.can_id, frame.len, frame.data[0]);
+                        if (!sendSocket (socketFd, frame)) {
+                                fmt::print ("Error transmitting frame Id : {:x}, dlc : {}, data[0] = {}\n", frame.can_id, frame.can_dlc,
+                                            frame.data[0]);
+
+                                return false;
+                        }
+
                         return true;
                 },
-                tp::ChronoTimeProvider{}, [] (auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
+                ChronoTimeProvider{}, [] (auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
 
-        tp.setDefaultAddress (tp::normal29Address (0x456, 0x123));
+        tp.setMyAddress (Address (0x456, 0x123));
 
         listenSocket (socketFd, [&tp] (auto const &frame) {
-                fmt::print ("Received frame Id : {:x}, dlc : {}, data[0] = {}\n", frame.can_id, frame.len, frame.data[0]);
+                fmt::print ("Received frame Id : {:x}, dlc : {}, data[0] = {}\n", frame.can_id, frame.can_dlc, frame.data[0]);
                 tp.onCanNewFrame (frame);
         });
 }

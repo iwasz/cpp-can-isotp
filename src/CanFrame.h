@@ -50,6 +50,7 @@ template <> class CanMessageWrapperBase<CanFrame> {
 public:
         explicit CanMessageWrapperBase (CanFrame const &cf) : frame (cf) {} /// Construct from underlying implementation type.
         template <typename... T> CanMessageWrapperBase (uint32_t id, bool extended, T... data) : frame (id, extended, data...) {}
+        CanMessageWrapperBase () = default;
 
         template <typename... T> static CanFrame create (uint32_t id, bool extended, T... data) { return CanFrame{id, extended, data...}; }
 
@@ -72,7 +73,7 @@ private:
         // This way we would get rid of one copy during reception of a CAN frame.
         // But at the other hand there must be a possibility to create new "wrappers" withgout
         // providing the internal object when sending frames.
-        CanFrame frame;
+        CanFrame frame{};
 };
 
 /**

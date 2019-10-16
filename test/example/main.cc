@@ -30,6 +30,10 @@ void receivingAsyncCallback ()
  * + Handle ISO messages that are constrained to less than maximum 4095B allowed by the
  * ISO document.
  * - Test the above.
+ * TODO : If errors occur during multi frame message receiving, the isoMessage should be
+ * removed (eventually, probably some timeouts are mentioned in the ISO). Now it is not
+ * possible to receive second message if first has failed to be received entirely.
+ * TODO Check if retyurn value from sendFrame is taken into account (checked).
  * TODO implement all types of addressing.
  * TODO Use some beter means of unit testing. Test time dependent calls, maybe use some
  * clever unit testing library like trompeleoleil for mocking.

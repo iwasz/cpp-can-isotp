@@ -71,7 +71,7 @@ TEST_CASE ("cross half-duplex 16B", "[crosswise]")
                 });
 
         // Source address is 0x89, Target address is 0x12, .
-        tpR.setDefaultAddress (normal29Address (0x89, 0x12));
+        tpR.setMyAddress (normal29Address (0x89, 0x12));
 
         auto tpT = create ([] (auto &&) {},
                            [&framesFromT] (auto &&canFrame) {
@@ -112,7 +112,7 @@ TEST_CASE ("cross half-duplex 16B wrong source", "[crosswise]")
                            });
 
         // Target address is 0x12, source address is 0x89.
-        tpR.setDefaultAddress (normal29Address (0x12, 0x89));
+        tpR.setMyAddress (normal29Address (0x12, 0x89));
 
         auto tpT = create ([] (auto &&) {},
                            [&framesFromT] (auto &&canFrame) {
@@ -121,7 +121,7 @@ TEST_CASE ("cross half-duplex 16B wrong source", "[crosswise]")
                            });
 
         // Target address is 0x89, source address is WRONGLY set to 0x13!
-        tpT.setDefaultAddress (normal29Address (0x89, 0x13));
+        tpT.setMyAddress (normal29Address (0x89, 0x13));
         tpT.send ({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
 
         while (tpT.isSending ()) {
@@ -175,7 +175,7 @@ TEST_CASE ("cross full-duplex 16B", "[crosswise]")
                 });
 
         // Target address is 0x12, source address is 0x89.
-        tpR.setDefaultAddress (normal29Address (0x12, 0x89));
+        tpR.setMyAddress (normal29Address (0x12, 0x89));
 
         auto tpT = create (
                 [&called] (auto &&isoMessage) {
@@ -205,7 +205,7 @@ TEST_CASE ("cross full-duplex 16B", "[crosswise]")
                 });
 
         // Target address is 0x89, source address is 0x12.
-        tpT.setDefaultAddress (normal29Address (0x89, 0x12));
+        tpT.setMyAddress (normal29Address (0x89, 0x12));
 
         tpT.send ({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
         tpR.send ({15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0});
@@ -244,7 +244,7 @@ TEST_CASE ("cross full-duplex 4095B", "[crosswise]")
                 });
 
         // Target address is 0x12, source address is 0x89.
-        tpR.setDefaultAddress (normal29Address (0x12, 0x89));
+        tpR.setMyAddress (normal29Address (0x12, 0x89));
 
         auto tpT = create (
                 [&called] (auto &&isoMessage) {
@@ -258,7 +258,7 @@ TEST_CASE ("cross full-duplex 4095B", "[crosswise]")
                 });
 
         // Target address is 0x89, source address is 0x12.
-        tpT.setDefaultAddress (normal29Address (0x89, 0x12));
+        tpT.setMyAddress (normal29Address (0x89, 0x12));
 
         tpT.send (std::vector<uint8_t> (4095));
         tpR.send (std::vector<uint8_t> (4095));
