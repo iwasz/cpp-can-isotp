@@ -130,7 +130,7 @@ int main ()
 
         int socketFd = createSocket ();
 
-        auto tp = create<can_frame> (
+        auto tp = create<can_frame, Normal11AddressEncoder> (
                 [] (auto const &tm) {
                         std::transform (std::begin (tm), std::end (tm), std::ostream_iterator<char> (std::cout), [] (auto b) {
                                 static_assert (std::is_same<decltype (b), uint8_t>::value);
@@ -154,7 +154,7 @@ int main ()
         tp.setMyAddress (Address (0x456, 0x123));
 
         listenSocket (socketFd, [&tp] (auto const &frame) {
-                fmt::print ("Received frame Id : {:x}, dlc : {}, data[0] = {}\n", frame.can_id, frame.can_dlc, frame.data[0]);
+                // fmt::print ("Received frame Id : {:x}, dlc : {}, data[0] = {}\n", frame.can_id, frame.can_dlc, frame.data[0]);
                 tp.onCanNewFrame (frame);
         });
 }

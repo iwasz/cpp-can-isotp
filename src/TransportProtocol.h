@@ -33,13 +33,13 @@
 namespace tp {
 
 template <typename CanFrameT, typename IsoMessageT, size_t MAX_MESSAGE_SIZE_T, typename AddressResolverT, typename CanOutputInterfaceT,
-          typename TimeProviderT, typename ErrorHandlerT, typename CallbackT>
+          typename TimeProviderT, typename ExceptionHandlerT, typename CallbackT>
 struct TransportProtocolTraits {
         using CanMessage = CanFrameT;
         using IsoMessageTT = IsoMessageT;
         using CanOutputInterface = CanOutputInterfaceT;
         using TimeProvider = TimeProviderT;
-        using ErrorHandler = ErrorHandlerT;
+        using ErrorHandler = ExceptionHandlerT;
         using Callback = CallbackT;
         using AddressResolver = AddressResolverT;
         static constexpr size_t MAX_MESSAGE_SIZE = MAX_MESSAGE_SIZE_T;
@@ -80,7 +80,8 @@ public:
         using AddressResolver = typename TraitsT::AddressResolver;
 
         /// Max allowed by the ISO standard.
-        const int MAX_ALLOWED_ISO_MESSAGE_SIZE = 4095;
+        static constexpr int MAX_ALLOWED_ISO_MESSAGE_SIZE = 4095;
+
         /// Max allowed by this implementation. Can be lowered if memory is scarce.
         static constexpr size_t MAX_ACCEPTED_ISO_MESSAGE_SIZE = TraitsT::MAX_MESSAGE_SIZE;
 
@@ -218,14 +219,14 @@ private:
                 void delay (uint32_t delayMs)
                 {
                         Timer t{delayMs};
-                        while (!t.isExpired ())
-                                ;
+                        while (!t.isExpired ()) {
+                        }
                 }
 
                 /// Returns system wide ms since system start.
                 uint32_t getTick () const { return now (); }
 
-        protected:
+        private:
                 uint32_t startTime = 0;
                 uint32_t intervalMs = 0;
         };
@@ -284,19 +285,14 @@ private:
                 };
 
                 StateMachine (CanOutputInterface &o, const Address &a, IsoMessageT const &m) : outputInterface (o), myAddress (a), message (m) {}
-                StateMachine (CanOutputInterface &o, const Address &a, IsoMessageT &&m) : outputInterface (o), myAddress (a), message (m) {}
+                // StateMachine (CanOutputInterface &o, const Address &a, IsoMessageT &&m) : outputInterface (o), myAddress (a), message (m) {}
                 ~StateMachine () = default;
 
                 StateMachine (StateMachine &&sm) noexcept = delete;
                 StateMachine &operator= (StateMachine &&sm) noexcept = delete;
 
-                StateMachine (StateMachine const &sm) noexcept : message{sm.message}, state{sm.state} {}
-                StateMachine &operator= (StateMachine const &sm) noexcept
-                {
-                        message = sm.message;
-                        state = sm.state;
-                        return *this;
-                }
+                StateMachine (StateMachine const &sm) noexcept = delete;
+                StateMachine &operator= (StateMachine const &sm) noexcept = delete;
 
                 void run (CanMessageWrapperType const *frame = nullptr);
                 State getState () const { return state; }
@@ -304,7 +300,7 @@ private:
         private:
                 CanOutputInterface &outputInterface;
                 Address myAddress;
-                IsoMessageT message;
+                IsoMessageT const &message;
                 State state = State::IDLE;
                 size_t bytesSent = 0;
                 uint16_t blocksSent = 0;
@@ -346,9 +342,9 @@ private:
 
 /*****************************************************************************/
 
-template <typename CanFrameT = CanFrame, typename IsoMessageT = IsoMessage, size_t MAX_MESSAGE_SIZE = 4095,
-          typename AddressResolverT = NormalAddress29Resolver, typename CanOutputInterfaceT = LinuxCanOutputInterface,
-          typename TimeProviderT = ChronoTimeProvider, typename ExceptionHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
+template <typename CanFrameT = CanFrame, typename AddressResolverT = Normal29AddressEncoder, typename IsoMessageT = IsoMessage,
+          size_t MAX_MESSAGE_SIZE = 4095, typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = ChronoTimeProvider,
+          typename ExceptionHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
 TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT, TimeProviderT,
                                           ExceptionHandlerT, CallbackT>>
 create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ExceptionHandlerT errorHandler = {})
@@ -416,26 +412,30 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (co
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (const Address &a, IsoMessageT const &msg)
 {
+        // TODO Co tu się dzieje - sprzawdzić zdebugerem, bo konstruktory są skasowane.
         stateMachine = StateMachine{outputInterface, a, msg};
         return true;
 }
 
 // TODO I wouldn't multiply those methods but rather use perfect forwarding magic (?)
-template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (const Address &a, IsoMessageT &&msg)
-{
-        stateMachine = StateMachine{outputInterface, a, msg};
-        return true;
-}
+// template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (const Address &a, IsoMessageT &&msg)
+// {
+//         stateMachine = StateMachine{outputInterface, a, msg};
+//         return true;
+// }
 
 /*****************************************************************************/
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &frame)
 {
         // Address as received in the CAN frame frame.
-        Address theirsAddress = AddressResolver::fromFrame (frame);
-        // TODO I'm replacing tagret and source addresess here. I don't know if that's OK.
-        // Address outgoingAddress (incomingAddress.getSourceAddress (), incomingAddress.getTargetAddress ());
+        auto theirAddress = AddressResolver::fromFrame (frame);
         Address const &outgoingAddress = myAddress;
+
+        // Check if the received frame is meant for us.
+        if (!theirAddress || theirAddress->remoteAddress != myAddress.localAddress) {
+                return false;
+        }
 
         switch (frame.getType ()) {
         case IsoNPduType::SINGLE_FRAME: {
@@ -454,7 +454,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         // As in 6.7.3 Table 18
                         // TODO this API is inefficient, we create empty IsoMessageT objecyt (which possibly can allocate as much as 4095B) only
                         // to discard it.
-                        indication (theirsAddress, {}, Result::N_UNEXP_PDU);
+                        indication (*theirAddress, {}, Result::N_UNEXP_PDU);
                         // Terminate the current reception of segmented message.
                         stack.removeMessage (isoMessage);
                         break;
@@ -462,7 +462,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 uint8_t dataOffset = frame.getNPciOffset () + 1;
                 message.append (frame, dataOffset, singleFrameLen);
-                indication (theirsAddress, message.data, Result::N_OK);
+                indication (*theirAddress, message.data, Result::N_OK);
         } break;
 
         case IsoNPduType::FIRST_FRAME: {
@@ -485,7 +485,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 if (isoMessage) {
                         // As in 6.7.3 Table 18
-                        indication (theirsAddress, {}, Result::N_UNEXP_PDU);
+                        indication (*theirAddress, {}, Result::N_UNEXP_PDU);
                         // Terminate the current reception of segmented message.
                         stack.removeMessage (isoMessage);
                 }
@@ -494,11 +494,11 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 isoMessage = stack.addMessage (frame.getId () /*, multiFrameRemainingLen*/);
 
                 if (!isoMessage) {
-                        indication (theirsAddress, {}, Result::N_MESSAGE_NUM_MAX);
+                        indication (*theirAddress, {}, Result::N_MESSAGE_NUM_MAX);
                         return false;
                 }
 
-                firstFrameIndication (theirsAddress, multiFrameRemainingLen);
+                firstFrameIndication (*theirAddress, multiFrameRemainingLen);
 
                 isoMessage->currentSn = 1;
                 isoMessage->multiFrameRemainingLen = multiFrameRemainingLen - firstFrameLen;
@@ -508,7 +508,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 // Send Flow Control
                 if (!sendFlowFrame (outgoingAddress, FlowStatus::CONTINUE_TO_SEND)) {
-                        indication (theirsAddress, {}, Result::N_ERROR);
+                        indication (*theirAddress, {}, Result::N_ERROR);
                         // Terminate the current reception of segmented message.
                         stack.removeMessage (isoMessage);
                 }
@@ -528,7 +528,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 if (frame.getSerialNumber () != isoMessage->currentSn) {
                         // 6.5.4.3 SN error handling
-                        indication (theirsAddress, {}, Result::N_WRONG_SN);
+                        indication (*theirAddress, {}, Result::N_WRONG_SN);
                         return false;
                 }
 
@@ -548,7 +548,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         return true;
                 }
 
-                indication (theirsAddress, isoMessage->data, Result::N_OK);
+                indication (*theirAddress, isoMessage->data, Result::N_OK);
                 stack.removeMessage (isoMessage);
 
         } break;
@@ -772,6 +772,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 AddressResolver::toFrame (myAddress, canFrame);
 
                 int toSend = std::min<int> (isoMessageSize, 6);
+
                 for (int i = 0; i < toSend; ++i) {
                         canFrame.set (i + 2, message.at (i));
                 }
@@ -800,10 +801,10 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 }
 
                 // Address as received in the CAN frame frame.
-                auto theirsAddress = AddressResolver::fromFrame (*frame);
+                auto theirAddress = AddressResolver::fromFrame (*frame);
 
-                // TODO I don't know if thaths OK:
-                if (theirsAddress.remoteAddress != myAddress.localAddress) {
+                // TODO encapsulate
+                if (!theirAddress || theirAddress->remoteAddress != myAddress.localAddress) {
                         break;
                 }
 
