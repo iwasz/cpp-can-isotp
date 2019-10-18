@@ -36,21 +36,21 @@ struct CanFrame {
         uint8_t dlc;
 };
 
-template <typename CanMessageT> struct CanMessageWrapperBase {
+template <typename CanFrameT> struct CanFrameWrapperBase {
 };
 
 /**
  * This is a wrapper which helps to use this library with different
  * CAN bus implementations. You can reimplement (add your own specialisation)
- * of this template class. Wrappers were split into this CanMessageWrapperBase
- * and CanMessageWrapper so users didn't have to reimplement all of the
- * methods CanMessageWrapper provide.
+ * of this template class. Wrappers were split into this CanFrameWrapperBase
+ * and CanFrameWrapper so users didn't have to reimplement all of the
+ * methods CanFrameWrapper provide.
  */
-template <> class CanMessageWrapperBase<CanFrame> {
+template <> class CanFrameWrapperBase<CanFrame> {
 public:
-        explicit CanMessageWrapperBase (CanFrame const &cf) : frame (cf) {} /// Construct from underlying implementation type.
-        template <typename... T> CanMessageWrapperBase (uint32_t id, bool extended, T... data) : frame (id, extended, data...) {}
-        CanMessageWrapperBase () = default;
+        explicit CanFrameWrapperBase (CanFrame const &cf) : frame (cf) {} /// Construct from underlying implementation type.
+        template <typename... T> CanFrameWrapperBase (uint32_t id, bool extended, T... data) : frame (id, extended, data...) {}
+        CanFrameWrapperBase () = default;
 
         template <typename... T> static CanFrame create (uint32_t id, bool extended, T... data) { return CanFrame{id, extended, data...}; }
 
@@ -79,10 +79,10 @@ private:
 /**
  * This is more speciffic interface and is not meant to be re-implemented.
  */
-template <typename CanFrameT> class CanMessageWrapper : public CanMessageWrapperBase<CanFrameT> {
+template <typename CanFrameT> class CanFrameWrapper : public CanFrameWrapperBase<CanFrameT> {
 public:
-        using CanMessageWrapperBase<CanFrameT>::CanMessageWrapperBase;
-        using Base = CanMessageWrapperBase<CanFrameT>;
+        using CanFrameWrapperBase<CanFrameT>::CanFrameWrapperBase;
+        using Base = CanFrameWrapperBase<CanFrameT>;
 
         /*---------------------------------------------------------------------------*/
 
@@ -95,7 +95,7 @@ public:
 
         uint8_t getNPciByte () const { return Base::get (getNPciOffset ()); }
         IsoNPduType getType () const { return getType (*this); }
-        static IsoNPduType getType (CanMessageWrapper const &f) { return IsoNPduType ((f.getNPciByte () & 0xF0) >> 4); }
+        static IsoNPduType getType (CanFrameWrapper const &f) { return IsoNPduType ((f.getNPciByte () & 0xF0) >> 4); }
 
         static bool isCanExtAddrActive (CanFrame const &f) { return false; }
         static IsoNPduType getType (CanFrame const &f) { return IsoNPduType ((f.data[(isCanExtAddrActive (f)) ? (1) : (0)] & 0xF0) >> 4); }

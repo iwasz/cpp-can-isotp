@@ -38,7 +38,7 @@ namespace tp {
 template <typename CanFrameT, typename IsoMessageT, size_t MAX_MESSAGE_SIZE_T, typename AddressResolverT, typename CanOutputInterfaceT,
           typename TimeProviderT, typename ExceptionHandlerT, typename CallbackT>
 struct TransportProtocolTraits {
-        using CanMessage = CanFrameT;
+        using CanFrame = CanFrameT;
         using IsoMessageTT = IsoMessageT;
         using CanOutputInterface = CanOutputInterfaceT;
         using TimeProvider = TimeProviderT;
@@ -73,13 +73,13 @@ static constexpr size_t N_CR_TIMEOUT = 1500;
  */
 template <typename TraitsT> class TransportProtocol {
 public:
-        using CanMessage = typename TraitsT::CanMessage;
+        using CanFrame = typename TraitsT::CanFrame;
         using IsoMessageT = typename TraitsT::IsoMessageTT;
         using CanOutputInterface = typename TraitsT::CanOutputInterface;
         using TimeProvider = typename TraitsT::TimeProvider;
         using ErrorHandler = typename TraitsT::ErrorHandler;
         using Callback = typename TraitsT::Callback;
-        using CanMessageWrapperType = CanMessageWrapper<CanMessage>;
+        using CanFrameWrapperType = CanFrameWrapper<CanFrame>;
         using AddressResolver = typename TraitsT::AddressResolver;
 
         /// Max allowed by the ISO standard.
@@ -160,7 +160,7 @@ public:
          * złożyć wiadomość ISO w całości. Kiedy podamy obiekt wiadomości jako drugi parametr, to
          * nie wywołuje callbacku, tylko zapisuje wynik w tym obiekcie. To jest używane w connect.
          */
-        bool onCanNewFrame (CanMessage const &f) { return onCanNewFrame (CanMessageWrapperType{f}); }
+        bool onCanNewFrame (CanFrame const &f) { return onCanNewFrame (CanFrameWrapperType{f}); }
 
         /*---------------------------------------------------------------------------*/
 
@@ -238,7 +238,7 @@ private:
          */
         struct TransportMessage {
 
-                int append (CanMessageWrapperType const &frame, size_t offset, size_t len);
+                int append (CanFrameWrapperType const &frame, size_t offset, size_t len);
 
                 uint32_t address = 0; /// Address Information M_AI
                 IsoMessageT data;     /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
@@ -249,7 +249,7 @@ private:
                 Timer timer;                      /// For tracking time between first and consecutive frames with the same address.
         };
 
-        bool onCanNewFrame (CanMessageWrapperType const &frame);
+        bool onCanNewFrame (CanFrameWrapperType const &frame);
 
         /*
          * Double linked list of ISO 15765-2 messages (up to 4095B long).
@@ -301,7 +301,7 @@ private:
                         message = std::move (m);
                 }
 
-                Status run (CanMessageWrapperType const *frame = nullptr);
+                Status run (CanFrameWrapperType const *frame = nullptr);
                 State getState () const { return state; }
 
         private:
@@ -413,7 +413,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (const Address &a, IsoMessageT const &msg)
 {
-        CanMessageWrapperType canFrame{0x00, true, int (IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f)};
+        CanFrameWrapperType canFrame{0x00, true, int (IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f)};
 
         if (!AddressResolver::toFrame (a, canFrame)) {
                 errorHandler (Status::ADDRESS_ENCODE_ERROR);
@@ -445,7 +445,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames 
 
 /*****************************************************************************/
 
-template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (const CanMessageWrapperType &frame)
+template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (const CanFrameWrapperType &frame)
 {
         // Address as received in the CAN frame frame.
         auto theirAddress = AddressResolver::fromFrame (frame);
@@ -631,7 +631,7 @@ template <typename TraitsT> uint32_t TransportProtocol<TraitsT>::getID (bool ext
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendFlowFrame (Address const &outgoingAddress, FlowStatus fs)
 {
-        CanMessageWrapperType fcCanFrame;
+        CanFrameWrapperType fcCanFrame;
 
         if (!AddressResolver::toFrame (outgoingAddress, fcCanFrame)) {
                 errorHandler (Status::ADDRESS_ENCODE_ERROR);
@@ -741,7 +741,7 @@ typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT
 /*****************************************************************************/
 
 template <typename TraitsT>
-int TransportProtocol<TraitsT>::TransportMessage::append (CanMessageWrapperType const &frame, size_t offset, size_t len)
+int TransportProtocol<TraitsT>::TransportMessage::append (CanFrameWrapperType const &frame, size_t offset, size_t len)
 {
         for (size_t inputIndex = 0; inputIndex < len; ++inputIndex) {
                 data.insert (data.end (), frame.get (inputIndex + offset));
@@ -752,7 +752,7 @@ int TransportProtocol<TraitsT>::TransportMessage::append (CanMessageWrapperType 
 
 /*****************************************************************************/
 
-template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run (CanMessageWrapperType const *frame)
+template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run (CanFrameWrapperType const *frame)
 {
         if (state != State::IDLE && state != State::SEND_FIRST_FRAME && bsCrTimer.isExpired ()) {
                 if (state == State::RECEIVE_BS_FLOW_CONTROL_FRAME || state == State::RECEIVE_FIRST_FLOW_CONTROL_FRAME) {
@@ -777,8 +777,8 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
         case State::SEND_FIRST_FRAME: {
                 // TODO addressing
-                CanMessageWrapperType canFrame (0x00, false, (int (IsoNPduType::FIRST_FRAME) << 4) | (isoMessageSize & 0xf00) >> 8,
-                                                (isoMessageSize & 0x0ff));
+                CanFrameWrapperType canFrame (0x00, false, (int (IsoNPduType::FIRST_FRAME) << 4) | (isoMessageSize & 0xf00) >> 8,
+                                              (isoMessageSize & 0x0ff));
 
                 if (!AddressResolver::toFrame (myAddress, canFrame)) {
                         return Status::ADDRESS_ENCODE_ERROR;
@@ -879,7 +879,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                         break;
                 }
 
-                CanMessageWrapperType canFrame (0x00, true, (int (IsoNPduType::CONSECUTIVE_FRAME) << 4) | sequenceNumber);
+                CanFrameWrapperType canFrame (0x00, true, (int (IsoNPduType::CONSECUTIVE_FRAME) << 4) | sequenceNumber);
 
                 if (!AddressResolver::toFrame (myAddress, canFrame)) {
                         return Status::ADDRESS_ENCODE_ERROR;

@@ -11,12 +11,13 @@
 
 void receivingAsyncCallback ()
 {
-        auto tp = tp::create ([] (auto &&tm) { std::cout << "TransportMessage : " << tm; },
-                              [] (auto &&canFrame) {
-                                      std::cout << "CAN Tx : " << canFrame << std::endl;
-                                      return true;
-                              },
-                              tp::ChronoTimeProvider{}, [] (auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
+        auto tp = tp::create (
+                tp::Address (0x12, 0x34), [] (auto &&tm) { std::cout << "TransportMessage : " << tm; },
+                [] (auto &&canFrame) {
+                        std::cout << "CAN Tx : " << canFrame << std::endl;
+                        return true;
+                },
+                tp::ChronoTimeProvider{}, [] (auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
 
         // Asynchronous - callback API
         tp.onCanNewFrame (tp::CanFrame (0x00, true, 1, 0x01, 0x67));
@@ -29,6 +30,8 @@ void receivingAsyncCallback ()
  *
  * + Handle ISO messages that are constrained to less than maximum 4095B allowed by the
  * ISO document.
+ * - Przejechać walgrindem od czasu do czasu
+ * - Optymalizacja, bo testy idą wolno!
  * - Test the above.
  * - It is possible to define a TP object without a defazult address and then use its send
  * method also without an address. This way you are sending a message into oblivion. Have

@@ -16,10 +16,10 @@ namespace tp {
  * Wrapper for particular can frame type we are using ini this program (namely
  * can_frame in this case).
  */
-template <> class CanMessageWrapperBase<can_frame> {
+template <> class CanFrameWrapperBase<can_frame> {
 public:
-        CanMessageWrapperBase () = default;
-        explicit CanMessageWrapperBase (can_frame const &cf) : frame (cf) {} /// Construct from underlying implementation type.
+        CanFrameWrapperBase () = default;
+        explicit CanFrameWrapperBase (can_frame const &cf) : frame (cf) {} /// Construct from underlying implementation type.
 
         template <typename A, typename... B> void setData (int totalElements, A c1, B... cr)
         {
@@ -31,7 +31,7 @@ public:
                 }
         }
 
-        template <typename... T> CanMessageWrapperBase (uint32_t id, bool extended, T... data)
+        template <typename... T> CanFrameWrapperBase (uint32_t id, bool extended, T... data)
         {
                 setId (id);
                 setExtended (extended);
