@@ -48,7 +48,7 @@ template <typename CanFrameT> struct CanFrameWrapperBase {
  */
 template <> class CanFrameWrapperBase<CanFrame> {
 public:
-        explicit CanFrameWrapperBase (CanFrame const &cf) : frame (cf) {} /// Construct from underlying implementation type.
+        explicit CanFrameWrapperBase (CanFrame cf) : frame (std::move (cf)) {} /// Construct from underlying implementation type.
         template <typename... T> CanFrameWrapperBase (uint32_t id, bool extended, T... data) : frame (id, extended, data...) {}
         CanFrameWrapperBase () = default;
 

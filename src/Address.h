@@ -70,17 +70,21 @@ struct Address {
 
 struct Normal11AddressEncoder {
 
+        static constexpr uint32_t MAX_N = 0x7ff;
+
         /**
          * Create an address from a received CAN frame. This is
          * the address which the remote party used to send the frame to us.
          */
         template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
-                if (!f.isExtended ()) {
-                        return Address (0x00, f.getId ());
+                auto fId = f.getId ();
+
+                if (f.isExtended () || fId > MAX_N) {
+                        return {};
                 }
 
-                return {};
+                return Address (0x00, fId);
         }
 
         /**
@@ -88,6 +92,10 @@ struct Normal11AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
+                if (a.remoteAddress > MAX_N) {
+                        return false;
+                }
+
                 f.setId (a.remoteAddress);
                 f.setExtended (false);
                 return true;
@@ -98,17 +106,20 @@ struct Normal11AddressEncoder {
 
 struct Normal29AddressEncoder {
 
+        static constexpr uint32_t MAX_N = 0x1FFFFFFF;
+
         /**
          * Create an address from a received CAN frame. This is
          * the address which the remote party used to send the frame to us.
          */
         template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
-                if (f.isExtended ()) {
-                        return Address (0x00, f.getId ());
-                }
+                auto fId = f.getId ();
 
-                return {};
+                if (!f.isExtended () || fId > MAX_N) {
+                        return {};
+                }
+                return Address (0x00, fId);
         }
 
         /**
@@ -116,6 +127,10 @@ struct Normal29AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
+                if (a.remoteAddress > MAX_N) {
+                        return false;
+                }
+
                 f.setId (a.remoteAddress);
                 f.setExtended (true);
                 return true;
