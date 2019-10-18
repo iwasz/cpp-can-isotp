@@ -60,10 +60,10 @@ struct Address {
         uint32_t remoteAddress{};
 
         /// 5.3.1
-        MessageType messageType{};
+        MessageType messageType{MessageType::DIAGNOSTICS};
 
         /// 5.3.2.4
-        TargetAddressType targetAddressType{};
+        TargetAddressType targetAddressType{TargetAddressType::PHYSICAL};
 };
 
 /****************************************************************************/
@@ -86,10 +86,11 @@ struct Normal11AddressEncoder {
         /**
          * Store address into a CAN frame. This is the address of the remote party we want the message to get to.
          */
-        template <typename CanFrameWrapper> static void toFrame (Address const &a, CanFrameWrapper &f)
+        template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
                 f.setId (a.remoteAddress);
                 f.setExtended (false);
+                return true;
         }
 };
 
@@ -113,10 +114,57 @@ struct Normal29AddressEncoder {
         /**
          * Store address into a CAN frame. This is the address of the remote party we want the message to get to.
          */
-        template <typename CanFrameWrapper> static void toFrame (Address const &a, CanFrameWrapper &f)
+        template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
                 f.setId (a.remoteAddress);
                 f.setExtended (true);
+                return true;
+        }
+};
+
+/****************************************************************************/
+
+struct NormalFixed29AddressEncoder {
+
+        static constexpr uint32_t NORMAL_FIXED_29_MASK = 0x018DA0000;
+        static constexpr uint32_t N_TA_MASK = 0x00000ff00;
+        static constexpr uint32_t N_TATYPE_MASK = 0x10000;
+        static constexpr uint32_t N_SA_MASK = 0x0000000ff;
+        static constexpr uint32_t MAX_N = 0xff; /// Maximum value that can be stored in either N_TA, N_SA.
+
+        /**
+         * Create an address from a received CAN frame. This is
+         * the address which the remote party used to send the frame to us.
+         */
+        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        {
+                auto fId = f.getId ();
+
+                if (!f.isExtended () || !bool (fId & NORMAL_FIXED_29_MASK)) {
+                        return {};
+                }
+
+                return Address (fId & N_SA_MASK, (fId & N_TA_MASK) >> 8, Address::MessageType::DIAGNOSTICS,
+                                (bool (fId & N_TATYPE_MASK)) ? (Address::TargetAddressType::FUNCTIONAL)
+                                                             : (Address::TargetAddressType::PHYSICAL));
+        }
+
+        /**
+         * Store address into a CAN frame. This is the address of the remote party we want the message to get to.
+         */
+        template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
+        {
+                if (a.localAddress > MAX_N || a.remoteAddress > MAX_N) {
+                        return false;
+                }
+
+                f.setId (NORMAL_FIXED_29_MASK | (a.targetAddressType == Address::TargetAddressType::FUNCTIONAL)
+                                 ? (N_TATYPE_MASK)
+                                 : (0) | a.remoteAddress << 15 | a.localAddress);
+
+                f.setExtended (true);
+
+                return true;
         }
 };
 
