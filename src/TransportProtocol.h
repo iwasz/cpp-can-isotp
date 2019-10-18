@@ -32,6 +32,9 @@
 
 namespace tp {
 
+/**
+ *
+ */
 template <typename CanFrameT, typename IsoMessageT, size_t MAX_MESSAGE_SIZE_T, typename AddressResolverT, typename CanOutputInterfaceT,
           typename TimeProviderT, typename ExceptionHandlerT, typename CallbackT>
 struct TransportProtocolTraits {
@@ -91,18 +94,20 @@ public:
               callback{callback},
               outputInterface{outputInterface},
               //              timeProvider{ timeProvider },
-              errorHandler{errorHandler}
+              errorHandler{errorHandler},
+              stateMachine{this->outputInterface}
         {
         }
 
         TransportProtocol (Address myAddress, Callback callback, CanOutputInterface outputInterface = {}, TimeProvider /*timeProvider*/ = {},
                            ErrorHandler errorHandler = {})
-            : myAddress (myAddress),
-              stack{errorHandler},
+            : stack{errorHandler},
               callback{callback},
               outputInterface{outputInterface},
               //              timeProvider{ timeProvider },
-              errorHandler{errorHandler}
+              errorHandler{errorHandler},
+              stateMachine{this->outputInterface},
+              myAddress (myAddress)
         {
         }
 
@@ -118,7 +123,7 @@ public:
          * processing, and then via run method is send in multiple CONSECUTIVE_FRAMES.
          * In ISO this method is called a 'request'
          */
-        bool send (Address const &a, IsoMessageT const &msg);
+        bool send (Address const &a, IsoMessageT msg);
 
         /**
          * Sends a message. If msg is so long, that it wouldn't fit in a SINGLE_FRAME (6 or 7 bytes
@@ -126,10 +131,7 @@ public:
          * processing, and then via run method is send in multiple CONSECUTIVE_FRAMES.
          * In ISO this method is called a 'request'
          */
-        bool send (Address const &a, IsoMessageT &&msg);
-
-        bool send (IsoMessageT const &msg) { return send (myAddress, msg); }
-        bool send (IsoMessageT &&msg) { return send (myAddress, msg); }
+        bool send (IsoMessageT msg) { return send (myAddress, std::move (msg)); }
 
         /**
          * Does the book keeping (checks for timeouts, runs the sending state machine).
@@ -139,7 +141,7 @@ public:
         /**
          *
          */
-        bool isSending () const { return bool (stateMachine); }
+        bool isSending () const { return stateMachine.getState () != StateMachine::State::DONE; }
 
         /*
          * API jest asynchroniczne, bo na prawdę nie ma tego jak inaczej zrobić. Ramki CAN
@@ -284,32 +286,37 @@ private:
                         DONE
                 };
 
-                StateMachine (CanOutputInterface &o, const Address &a, IsoMessageT const &m) : outputInterface (o), myAddress (a), message (m) {}
-                // StateMachine (CanOutputInterface &o, const Address &a, IsoMessageT &&m) : outputInterface (o), myAddress (a), message (m) {}
+                explicit StateMachine (CanOutputInterface &o) : outputInterface (o) {}
                 ~StateMachine () = default;
 
                 StateMachine (StateMachine &&sm) noexcept = delete;
-                StateMachine &operator= (StateMachine &&sm) noexcept = delete;
+                StateMachine &operator= (StateMachine &&sm) = delete;
 
                 StateMachine (StateMachine const &sm) noexcept = delete;
                 StateMachine &operator= (StateMachine const &sm) noexcept = delete;
 
-                void run (CanMessageWrapperType const *frame = nullptr);
+                void reset (Address const &a, IsoMessage &&m)
+                {
+                        myAddress = a;
+                        message = std::move (m);
+                }
+
+                Status run (CanMessageWrapperType const *frame = nullptr);
                 State getState () const { return state; }
 
         private:
                 CanOutputInterface &outputInterface;
-                Address myAddress;
-                IsoMessageT const &message;
-                State state = State::IDLE;
-                size_t bytesSent = 0;
-                uint16_t blocksSent = 0;
-                uint8_t sequenceNumber = 1;
-                uint8_t blockSize = 0;
-                uint32_t separationTimeUs = 0;
-                Timer separationTimer;
-                Timer bsCrTimer;
-                uint8_t waitFrameNumber = 0;
+                Address myAddress{};
+                IsoMessage message{};
+                State state{State::IDLE};
+                size_t bytesSent{};
+                uint16_t blocksSent{};
+                uint8_t sequenceNumber{1};
+                uint8_t blockSize{};
+                uint32_t separationTimeUs{};
+                Timer separationTimer{};
+                Timer bsCrTimer{};
+                uint8_t waitFrameNumber{};
         };
 
         /*---------------------------------------------------------------------------*/
@@ -323,7 +330,6 @@ private:
         uint32_t getID (bool extended) const;
         bool sendFlowFrame (const Address &outgoingAddress, FlowStatus fs = FlowStatus::CONTINUE_TO_SEND);
         bool sendSingleFrame (const Address &a, IsoMessageT const &msg);
-        bool sendMultipleFrames (const Address &a, IsoMessageT const &msg);
         bool sendMultipleFrames (const Address &a, IsoMessageT &&msg);
 
         TransportMessageList stack;
@@ -336,7 +342,7 @@ private:
         Callback callback;
         CanOutputInterface outputInterface;
         ErrorHandler errorHandler;
-        std::optional<StateMachine> stateMachine;
+        StateMachine stateMachine;
         Address myAddress;
 };
 
@@ -354,7 +360,21 @@ create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProvid
 
 /*****************************************************************************/
 
-template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address &a, IsoMessageT const &msg)
+template <typename CanFrameT = CanFrame, typename AddressResolverT = Normal29AddressEncoder, typename IsoMessageT = IsoMessage,
+          size_t MAX_MESSAGE_SIZE = 4095, typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = ChronoTimeProvider,
+          typename ExceptionHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
+auto create (Address const &myAddress, CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {},
+             ExceptionHandlerT errorHandler = {})
+{
+        using TP = TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT,
+                                                             TimeProviderT, ExceptionHandlerT, CallbackT>>;
+
+        return TP{myAddress, callback, outputInterface, timeProvider, errorHandler};
+}
+
+/*****************************************************************************/
+
+template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address &a, IsoMessageT msg)
 {
         if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
                 return false;
@@ -368,37 +388,37 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
         }
 
         // Send using multiple frames, state machine, and timing controll and whatnot.
-        return sendMultipleFrames (a, msg);
+        return sendMultipleFrames (a, std::move (msg));
         return true;
 }
 
 /*****************************************************************************/
 
-template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address &a, IsoMessageT &&msg)
-{
-        if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
-                return false;
-        }
-
-        // 6 or 7 depending on addressing used
-        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (isCanExtAddrActive ());
-
-        if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
-                return sendSingleFrame (a, msg);
-        }
-
-        // Send using multiple frames, state machine, and timing controll and whatnot.
-        return sendMultipleFrames (a, msg);
-
-        return true;
-}
+// template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address &a, gsl::not_null<IsoMessageT const *> msg)
+// {
+//         if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
+//                 return false;
+//         }
+//         // 6 or 7 depending on addressing used
+//         const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (isCanExtAddrActive ());
+//         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
+//                 return sendSingleFrame (a, msg);
+//         }
+//         // Send using multiple frames, state machine, and timing controll and whatnot.
+//         return sendMultipleFrames (a, msg);
+//         return true;
+// }
 
 /*****************************************************************************/
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (const Address &a, IsoMessageT const &msg)
 {
         CanMessageWrapperType canFrame{0x00, true, int (IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f)};
-        AddressResolver::toFrame (a, canFrame);
+
+        if (!AddressResolver::toFrame (a, canFrame)) {
+                errorHandler (Status::ADDRESS_ENCODE_ERROR);
+                return false;
+        }
 
         for (size_t i = 0; i < msg.size (); ++i) {
                 canFrame.set (i + 1, msg.at (i));
@@ -410,10 +430,9 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (co
 
 /*****************************************************************************/
 
-template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (const Address &a, IsoMessageT const &msg)
+template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (const Address &a, IsoMessageT &&msg)
 {
-        // TODO Co tu się dzieje - sprzawdzić zdebugerem, bo konstruktory są skasowane.
-        stateMachine = StateMachine{outputInterface, a, msg};
+        stateMachine.reset (a, std::move (msg));
         return true;
 }
 
@@ -554,11 +573,11 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
         } break;
 
         case IsoNPduType::FLOW_FRAME: {
-                if (!stateMachine) { // No segmented transmission active
-                        break;       // Ignore
+                if (Status s = stateMachine.run (&frame); s != Status::OK) {
+                        errorHandler (s);
+                        return false;
                 }
 
-                stateMachine->run (&frame);
         } break;
 
         default:
@@ -586,12 +605,9 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::run ()
         }
 
         // Run state machine(s) if any to perform transmission.
-        if (stateMachine) {
-                stateMachine->run ();
-        }
-
-        if (stateMachine->getState () == StateMachine::State::DONE) {
-                stateMachine = std::nullopt;
+        if (Status s = stateMachine.run (); s != Status::OK) {
+                errorHandler (s);
+                return;
         }
 }
 
@@ -615,32 +631,24 @@ template <typename TraitsT> uint32_t TransportProtocol<TraitsT>::getID (bool ext
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendFlowFrame (Address const &outgoingAddress, FlowStatus fs)
 {
-#if 0
-        if (extendedFrame) {
-                /*
-                 * BlockSize == 0, which means indefinite block size, and STMin == 0 which means
-                 * minimum delay between consecutive frames
-                 */
-                CanMessageWrapperType ctrlData (0x18DA00F1 | ((frame.getId () & 0xFF) << 8), true, 0x30 | uint8_t (fs));
-                ctrlData.set (1, 0);
-                ctrlData.set (2, 0);
-                return outputInterface (ctrlData.value ());
-        }
-        else {
-                CanMessageWrapperType ctrlData (0x7E0 | (frame.getId () & 0x07), false, 0x30 | uint8_t (fs));
-                ctrlData.set (1, 0);
-                ctrlData.set (2, 0);
-                return outputInterface (ctrlData.value ());
-        }
-#endif
-
         CanMessageWrapperType fcCanFrame;
-        AddressResolver::toFrame (outgoingAddress, fcCanFrame);
+
+        if (!AddressResolver::toFrame (outgoingAddress, fcCanFrame)) {
+                errorHandler (Status::ADDRESS_ENCODE_ERROR);
+                return false;
+        }
+
         fcCanFrame.set (0, (uint8_t (IsoNPduType::FLOW_FRAME) << 4) | uint8_t (fs));
         fcCanFrame.set (1, 0); // BS
         fcCanFrame.set (2, 0); // Stmin
         fcCanFrame.setDlc (3);
-        return outputInterface (fcCanFrame.value ());
+
+        if (!outputInterface (fcCanFrame.value ())) {
+                errorHandler (Status::SEND_FAILED);
+                return false;
+        }
+
+        return true;
 }
 
 /*****************************************************************************/
@@ -699,7 +707,7 @@ typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT
 
         TransportMessage *afterM = m->next;
 
-        if (!first || !size) {
+        if (!first || size == 0) {
                 // Critical error. Hang.
                 // errorHandler (Error::CRITICAL_ALGORITHM);
                 return nullptr;
@@ -744,7 +752,7 @@ int TransportProtocol<TraitsT>::TransportMessage::append (CanMessageWrapperType 
 
 /*****************************************************************************/
 
-template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (CanMessageWrapperType const *frame)
+template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run (CanMessageWrapperType const *frame)
 {
         if (state != State::IDLE && state != State::SEND_FIRST_FRAME && bsCrTimer.isExpired ()) {
                 if (state == State::RECEIVE_BS_FLOW_CONTROL_FRAME || state == State::RECEIVE_FIRST_FLOW_CONTROL_FRAME) {
@@ -757,7 +765,10 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 state = State::DONE;
         }
 
-        uint16_t isoMessageSize = message.size ();
+        // IsoMessage *message = (messagePtr) ?( messagePtr ): &message;
+        IsoMessage *message = &this->message;
+
+        uint16_t isoMessageSize = message->size ();
 
         switch (state) {
         case State::IDLE:
@@ -769,12 +780,14 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 CanMessageWrapperType canFrame (0x00, false, (int (IsoNPduType::FIRST_FRAME) << 4) | (isoMessageSize & 0xf00) >> 8,
                                                 (isoMessageSize & 0x0ff));
 
-                AddressResolver::toFrame (myAddress, canFrame);
+                if (!AddressResolver::toFrame (myAddress, canFrame)) {
+                        return Status::ADDRESS_ENCODE_ERROR;
+                }
 
                 int toSend = std::min<int> (isoMessageSize, 6);
 
                 for (int i = 0; i < toSend; ++i) {
-                        canFrame.set (i + 2, message.at (i));
+                        canFrame.set (i + 2, message->at (i));
                 }
 
                 canFrame.setDlc (2 + toSend);
@@ -867,14 +880,17 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 }
 
                 CanMessageWrapperType canFrame (0x00, true, (int (IsoNPduType::CONSECUTIVE_FRAME) << 4) | sequenceNumber);
-                AddressResolver::toFrame (myAddress, canFrame);
+
+                if (!AddressResolver::toFrame (myAddress, canFrame)) {
+                        return Status::ADDRESS_ENCODE_ERROR;
+                }
 
                 ++sequenceNumber;
                 sequenceNumber %= 16;
 
                 int toSend = std::min<int> (isoMessageSize - bytesSent, 7);
                 for (int i = 0; i < toSend; ++i) {
-                        canFrame.set (i + 1, message.at (i + bytesSent));
+                        canFrame.set (i + 1, message->at (i + bytesSent));
                 }
 
                 canFrame.setDlc (1 + toSend);
@@ -882,7 +898,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
                 outputInterface (canFrame.value ());
                 bytesSent += toSend;
 
-                if (bytesSent >= message.size ()) {
+                if (bytesSent >= message->size ()) {
                         state = State::DONE;
                         break;
                 }
@@ -901,7 +917,9 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::StateMachine::run (
         default:
                 break;
         }
-} // namespace tp
+
+        return Status::OK;
+}
 
 } // namespace tp
 
@@ -932,7 +950,7 @@ inline std::ostream &operator<< (std::ostream &o, tp::CanFrame const &cf)
         o << "CanFrame id = " << cf.id << ", dlc = " << int (cf.dlc) << ", ext = " << cf.extended << ", data = [";
 
         for (int i = 0; i < cf.dlc;) {
-                o << int (cf.data[i]);
+                o << int (gsl::at (cf.data, i));
 
                 if (++i != cf.dlc) {
                         o << ",";

@@ -11,26 +11,26 @@
 
 using namespace tp;
 
-TEST_CASE ("tx 1B", "[transmission]")
+TEST_CASE ("tx 1B", "[send]")
 {
         bool called = false;
-        auto tp = create ([] (auto &&) {},
-                          [&called] (auto &&canFrame) {
+        auto tp = create ([] (auto const & /*unused*/) {},
+                          [&called] (auto const &canFrame) {
                                   called = true;
                                   REQUIRE (canFrame.data[0] == 0x01); // SINGLE FRAME, 1B length
                                   REQUIRE (canFrame.data[1] == 0x55); // actual data
-                                  REQUIRE (canFrame.id == 0x67);
+                                  REQUIRE (canFrame.id == 0x89);
                                   return true;
                           });
 
-        tp.send (normal29Address (0x67, 0x89), {0x55});
+        tp.send (Address (0x67, 0x89), {0x55});
         REQUIRE (called);
 }
 
-TEST_CASE ("tx 7B", "[transmission]")
+TEST_CASE ("tx 7B", "[send]")
 {
         bool called = false;
-        auto tp = create ([] (auto &&) {},
+        auto tp = create ([] (auto const & /* unused*/) {},
                           [&called] (auto &&canFrame) {
                                   called = true;
                                   REQUIRE (canFrame.data[0] == 0x07); // SINGLE FRAME, 7B length
@@ -44,62 +44,69 @@ TEST_CASE ("tx 7B", "[transmission]")
                                   return true;
                           });
 
-        tp.send (normal29Address (0x00, 0x00), {0, 1, 2, 3, 4, 5, 6});
+        tp.send (Address (0x00, 0x00), {0, 1, 2, 3, 4, 5, 6});
         REQUIRE (called);
 }
 
 /****************************************************************************/
 
-TEST_CASE ("tx 8B", "[transmission]")
+TEST_CASE ("tx 8B", "[send]")
 {
-        int calledTimes = 0;
-        auto tp = create ([] (auto &&) {},
-                          [&calledTimes] (auto &&canFrame) {
-                                  // 1. It should send a first frame
-                                  if (calledTimes == 0) {
-                                          REQUIRE (int (canFrame.data[0]) == 0x10); // FISRT FRAME
-                                          REQUIRE (int (canFrame.data[1]) == 8);    // 8B length
-                                          REQUIRE (int (canFrame.data[2]) == 0);    // First byte
-                                          REQUIRE (int (canFrame.data[3]) == 1);
-                                          REQUIRE (int (canFrame.data[4]) == 2);
-                                          REQUIRE (int (canFrame.data[5]) == 3);
-                                          REQUIRE (int (canFrame.data[6]) == 4);
-                                          REQUIRE (int (canFrame.data[7]) == 5);
-                                          ++calledTimes;
-                                          return true;
-                                  }
+        {
+                int calledTimes = 0;
 
-                                  // 1. It should send a first frame
-                                  if (calledTimes == 1) {
-                                          REQUIRE (int (canFrame.data[0]) == 0x21); // CONSECUTIVE FRAME, serial number 1
-                                          REQUIRE (int (canFrame.data[1]) == 6);    // actual data - 7th byte
-                                          REQUIRE (int (canFrame.data[2]) == 7);    // actual data - last, eight byte
-                                          ++calledTimes;
-                                          return true;
-                                  }
+                auto aaa = [&calledTimes] (auto const &canFrame) {
+                        // 1. It should send a first frame
+                        if (calledTimes == 0) {
+                                REQUIRE (int (canFrame.data[0]) == 0x10); // FISRT FRAME
+                                REQUIRE (int (canFrame.data[1]) == 8);    // 8B length
+                                REQUIRE (int (canFrame.data[2]) == 0);    // First byte
+                                REQUIRE (int (canFrame.data[3]) == 1);
+                                REQUIRE (int (canFrame.data[4]) == 2);
+                                REQUIRE (int (canFrame.data[5]) == 3);
+                                REQUIRE (int (canFrame.data[6]) == 4);
+                                REQUIRE (int (canFrame.data[7]) == 5);
+                                ++calledTimes;
+                                return true;
+                        }
 
-                                  return false;
-                          });
+                        // 1. It should send a first frame
+                        if (calledTimes == 1) {
+                                REQUIRE (int (canFrame.data[0]) == 0x21); // CONSECUTIVE FRAME, serial number 1
+                                REQUIRE (int (canFrame.data[1]) == 6);    // actual data - 7th byte
+                                REQUIRE (int (canFrame.data[2]) == 7);    // actual data - last, eight byte
+                                ++calledTimes;
+                                return true;
+                        }
 
-        tp.send (normal29Address (0x00, 0x00), {0, 1, 2, 3, 4, 5, 6, 7});
-        tp.run ();                                      // IDLE -> SEND_FIRST_FRAME
-        tp.run ();                                      // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
-        tp.onCanNewFrame (CanFrame (0x00, true, 0x30)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
-        tp.run ();                                      // SEND_CONSECUTIVE_FRAME -> DONE
+                        return false;
+                };
 
-        while (tp.isSending ()) {
-                tp.run ();
+                auto tp = create ([] (auto const & /*unused*/) {}, aaa);
+
+                tp.send (Address (0x00, 0x00), {0, 1, 2, 3, 4, 5, 6, 7});
+                tp.run ();                                      // IDLE -> SEND_FIRST_FRAME
+                tp.run ();                                      // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
+                tp.onCanNewFrame (CanFrame (0x00, true, 0x30)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
+                tp.run ();                                      // SEND_CONSECUTIVE_FRAME -> DONE
+
+                while (tp.isSending ()) {
+                        tp.run ();
+                }
+
+                aaa (CanFrame (0x00, true, 1, 2, 3));
+                aaa (CanFrame (0x00, true, 1, 2, 3));
+
+                REQUIRE (calledTimes == 2);
         }
-
-        REQUIRE (calledTimes == 2);
 }
 
 /****************************************************************************/
 
-TEST_CASE ("tx 12B", "[transmission]")
+TEST_CASE ("tx 12B", "[send]")
 {
         int calledTimes = 0;
-        auto tp = create ([] (auto &&) {},
+        auto tp = create ([] (auto const & /* unused*/) {},
                           [&calledTimes] (auto &&canFrame) {
                                   // 1. It should send a first frame
                                   if (calledTimes == 0) {
@@ -132,7 +139,7 @@ TEST_CASE ("tx 12B", "[transmission]")
                                   return false;
                           });
 
-        tp.send (normal29Address (0x00, 0x00), {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+        tp.send (Address (0x00, 0x00), {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
         tp.run ();                                      // IDLE -> SEND_FIRST_FRAME
         tp.run ();                                      // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
         tp.onCanNewFrame (CanFrame (0x00, true, 0x30)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
@@ -145,10 +152,10 @@ TEST_CASE ("tx 12B", "[transmission]")
         REQUIRE (calledTimes == 2);
 }
 
-TEST_CASE ("tx 4095B", "[transmission]")
+TEST_CASE ("tx 4095B", "[send]")
 {
         int calledTimes = 0;
-        auto tp = create ([] (auto &&) {},
+        auto tp = create ([] (auto const & /*unused*/) {},
                           [&calledTimes] (auto &&canFrame) {
                                   if (calledTimes == 0) {
                                           REQUIRE (int (canFrame.dlc) == 8);
@@ -233,7 +240,7 @@ TEST_CASE ("tx 4095B", "[transmission]")
                 b = v++;
         }
 
-        tp.send (normal29Address (0x00, 0x00), message);
+        tp.send (Address (0x00, 0x00), message);
         tp.run ();                                                  // IDLE -> SEND_FIRST_FRAME
         tp.run ();                                                  // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
         tp.onCanNewFrame (CanFrame (0x00, true, 0x30, 0x00, 0x00)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
@@ -246,8 +253,26 @@ TEST_CASE ("tx 4095B", "[transmission]")
         REQUIRE (calledTimes == 586);
 }
 
-TEST_CASE ("tx 4096B", "[transmission]")
+TEST_CASE ("tx 4096B", "[send]")
 {
-        auto tp = create ([] (auto &&) {});
-        REQUIRE (tp.send (normal29Address (0x67, 0x89), std::vector<uint8_t> (4096)) == false);
+        {
+                auto tp = create ([] (auto const & /*unused*/) {});
+                // Move
+                REQUIRE (tp.send (Address (0x67, 0x89), std::vector<uint8_t> (4096)) == false);
+        }
+
+        {
+                auto tp = create ([] (auto const & /*unused*/) {});
+                // Copy
+                auto v = std::vector<uint8_t> (4096);
+                REQUIRE (tp.send (Address (0x67, 0x89), v) == false);
+        }
+
+        {
+                auto tp = create ([] (auto const & /*unused*/) {});
+                // Reference
+                auto v = std::vector<uint8_t> (4096);
+                auto r = std::ref (v);
+                REQUIRE (tp.send (Address (0x67, 0x89), r) == false);
+        }
 }

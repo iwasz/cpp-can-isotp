@@ -11,7 +11,7 @@
 
 using namespace tp;
 
-TEST_CASE ("rx 1B", "[reception]")
+TEST_CASE ("rx 1B", "[recv]")
 {
         bool called = false;
         auto tp = create ([&called] (auto &&tm) {
@@ -24,7 +24,7 @@ TEST_CASE ("rx 1B", "[reception]")
         REQUIRE (called);
 }
 
-TEST_CASE ("rx 7B", "[reception]")
+TEST_CASE ("rx 7B", "[recv]")
 {
         bool called = false;
         auto tp = create ([&called] (auto &&tm) {
@@ -43,7 +43,7 @@ TEST_CASE ("rx 7B", "[reception]")
         REQUIRE (called);
 }
 
-TEST_CASE ("rx 8B", "[reception]")
+TEST_CASE ("rx 8B", "[recv]")
 {
         bool called = false;
         bool flow = false;
@@ -73,7 +73,7 @@ TEST_CASE ("rx 8B", "[reception]")
         REQUIRE (flow);
 }
 
-TEST_CASE ("rx 13B", "[reception]")
+TEST_CASE ("rx 13B", "[recv]")
 {
         bool called = false;
         bool flow = false;
@@ -109,7 +109,7 @@ TEST_CASE ("rx 13B", "[reception]")
         REQUIRE (flow);
 }
 
-TEST_CASE ("rx 4095B", "[reception]")
+TEST_CASE ("rx 4095B", "[recv]")
 {
         bool called = false;
         bool flow = false;

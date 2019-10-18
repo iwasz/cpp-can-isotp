@@ -9,6 +9,7 @@
 #pragma once
 #include <chrono>
 #include <cstdint>
+#include <gsl/gsl>
 #include <iostream>
 #include <vector>
 
@@ -51,10 +52,20 @@ enum class Result {
 };
 
 /**
+ * Status (mostly error) codes passed into the errorHandler.
+ */
+enum class Status {
+        OK,                   /// No error
+        ADDRESS_DECODE_ERROR, /// Address encoder was unable to decode an address from frame id.
+        ADDRESS_ENCODE_ERROR, /// Address encoder was unable to encode an address into a frame id.
+        SEND_FAILED           /// Unable to send a can frame.
+};
+
+/**
  * @brief The InfiniteLoop struct
  */
 struct InfiniteLoop {
-        [[noreturn]] void operator() (/*Error*/)
+        template <typename T> void operator() (T const & /*Error*/)
         {
                 while (true) {
                 }
@@ -65,7 +76,7 @@ struct InfiniteLoop {
  * @brief The EmptyCallback struct
  */
 struct EmptyCallback {
-        template <typename... T>[[noreturn]] void operator() (T...) {}
+        template <typename... T> void operator() (T... /* a */) {}
 };
 
 /**
@@ -79,7 +90,7 @@ struct EmptyCallback {
  * also should return false. Those are N_As and N_Ar timeouts.
  */
 struct LinuxCanOutputInterface {
-        bool operator() (CanFrame const &) { return true; }
+        bool operator() (CanFrame const & /*unused*/) { return true; }
 };
 
 struct CoutPrinter {

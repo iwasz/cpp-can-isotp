@@ -130,7 +130,8 @@ int main ()
 
         int socketFd = createSocket ();
 
-        auto tp = create<can_frame, Normal11AddressEncoder> (
+        auto tp = create<can_frame, NormalFixed29AddressEncoder> (
+                Address (0x34, 0x12),
                 [] (auto const &tm) {
                         std::transform (std::begin (tm), std::end (tm), std::ostream_iterator<char> (std::cout), [] (auto b) {
                                 static_assert (std::is_same<decltype (b), uint8_t>::value);
@@ -149,9 +150,7 @@ int main ()
 
                         return true;
                 },
-                ChronoTimeProvider{}, [] (auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
-
-        tp.setMyAddress (Address (0x456, 0x123));
+                ChronoTimeProvider{}, [] (auto const &error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
 
         listenSocket (socketFd, [&tp] (auto const &frame) {
                 // fmt::print ("Received frame Id : {:x}, dlc : {}, data[0] = {}\n", frame.can_id, frame.can_dlc, frame.data[0]);
