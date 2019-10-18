@@ -142,3 +142,30 @@ TEST_CASE ("Normal29 decode", "[address]")
                 REQUIRE (!a);
         }
 }
+
+TEST_CASE ("NormalFixed29 encode", "[address]")
+{
+        {
+                // Simple address
+                CanFrameWrapper<CanFrame> cfw{CanFrame ()};
+                REQUIRE (NormalFixed29AddressEncoder::toFrame (
+                        Address (0x12, 0x34, Address::MessageType::DIAGNOSTICS, Address::TargetAddressType::PHYSICAL), cfw));
+
+                REQUIRE (cfw.getId () == ((0b110 << 26) | (218 << 16) | (0x34 << 8) | 0x12));
+                REQUIRE (cfw.isExtended ());
+        }
+}
+
+TEST_CASE ("NormalFixed29 decode", "[address]")
+{
+        {
+                // Simple address
+                CanFrameWrapper<CanFrame> cfw{CanFrame ()};
+                cfw.setId ((0b110 << 26) | (218 << 16) | (0x34 << 8) | 0x12);
+                cfw.setExtended (true);
+                auto a = NormalFixed29AddressEncoder::fromFrame (cfw);
+                REQUIRE (a);
+                REQUIRE (a->localAddress == 0x12);
+                REQUIRE (a->remoteAddress == 0x34);
+        }
+}

@@ -173,9 +173,8 @@ struct NormalFixed29AddressEncoder {
                         return false;
                 }
 
-                f.setId (NORMAL_FIXED_29_MASK | (a.targetAddressType == Address::TargetAddressType::FUNCTIONAL)
-                                 ? (N_TATYPE_MASK)
-                                 : (0) | a.remoteAddress << 15 | a.localAddress);
+                f.setId (NORMAL_FIXED_29_MASK | ((a.targetAddressType == Address::TargetAddressType::FUNCTIONAL) ? (N_TATYPE_MASK) : (0))
+                         | a.remoteAddress << 8 | a.localAddress);
 
                 f.setExtended (true);
 
