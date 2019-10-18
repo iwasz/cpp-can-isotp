@@ -30,6 +30,9 @@ void receivingAsyncCallback ()
  * + Handle ISO messages that are constrained to less than maximum 4095B allowed by the
  * ISO document.
  * - Test the above.
+ * - It is possible to define a TP object without a defazult address and then use its send
+ * method also without an address. This way you are sending a message into oblivion. Have
+ * it sorted out.
  * TODO : If errors occur during multi frame message receiving, the isoMessage should be
  * removed (eventually, probably some timeouts are mentioned in the ISO). Now it is not
  * possible to receive second message if first has failed to be received entirely.
