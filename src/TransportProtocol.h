@@ -44,7 +44,7 @@ struct TransportProtocolTraits {
         using TimeProvider = TimeProviderT;
         using ErrorHandler = ExceptionHandlerT;
         using Callback = CallbackT;
-        using AddressResolver = AddressResolverT;
+        using AddressEncoderT = AddressResolverT;
         static constexpr size_t MAX_MESSAGE_SIZE = MAX_MESSAGE_SIZE_T;
 };
 
@@ -80,8 +80,8 @@ public:
         using ErrorHandler = typename TraitsT::ErrorHandler;
         using Callback = typename TraitsT::Callback;
         using CanFrameWrapperType = CanFrameWrapper<CanFrame>;
-        using AddressResolver = typename TraitsT::AddressResolver;
-        using AddressTraitsT = AddressTraits<AddressResolver>;
+        using AddressEncoderT = typename TraitsT::AddressEncoderT;
+        using AddressTraitsT = AddressTraits<AddressEncoderT>;
 
         /// Max allowed by the ISO standard.
         static constexpr int MAX_ALLOWED_ISO_MESSAGE_SIZE = 4095;
@@ -416,7 +416,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (co
 {
         CanFrameWrapperType canFrame{0x00, true, int (IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f)};
 
-        if (!AddressResolver::toFrame (a, canFrame)) {
+        if (!AddressEncoderT::toFrame (a, canFrame)) {
                 errorHandler (Status::ADDRESS_ENCODE_ERROR);
                 return false;
         }
@@ -442,11 +442,16 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (const CanFrameWrapperType &frame)
 {
         // Address as received in the CAN frame frame.
-        auto theirAddress = AddressResolver::fromFrame (frame);
+        auto theirAddress = AddressEncoderT::fromFrame (frame);
         Address const &outgoingAddress = myAddress;
 
         // Check if the received frame is meant for us.
-        if (!theirAddress || theirAddress->txId != myAddress.rxId) {
+        // if (!theirAddress || theirAddress->txId != myAddress.rxId) {
+        //         return false;
+        // }
+
+        // Check if the received frame is meant for us.
+        if (!theirAddress || !AddressEncoderT::matches (*theirAddress, myAddress)) {
                 return false;
         }
 
@@ -627,13 +632,13 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendFlowFrame (Addr
 {
         CanFrameWrapperType fcCanFrame;
 
-        if (!AddressResolver::toFrame (outgoingAddress, fcCanFrame)) {
+        if (!AddressEncoderT::toFrame (outgoingAddress, fcCanFrame)) {
                 errorHandler (Status::ADDRESS_ENCODE_ERROR);
                 return false;
         }
 
         fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 0, (uint8_t (IsoNPduType::FLOW_FRAME) << 4) | uint8_t (fs));
-        fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 1, 0); // BS
+        fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 1, 8); // BS
         fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 2, 0); // Stmin
         fcCanFrame.setDlc (3 + AddressTraitsT::N_PCI_OFSET);
 
@@ -763,7 +768,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
         uint16_t isoMessageSize = message->size ();
 
-        using Traits = AddressTraits<AddressResolver>;
+        using Traits = AddressTraits<AddressEncoderT>;
 
         switch (state) {
         case State::IDLE:
@@ -775,7 +780,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 CanFrameWrapperType canFrame (0x00, false, (int (IsoNPduType::FIRST_FRAME) << 4) | (isoMessageSize & 0xf00) >> 8,
                                               (isoMessageSize & 0x0ff));
 
-                if (!AddressResolver::toFrame (myAddress, canFrame)) {
+                if (!AddressEncoderT::toFrame (myAddress, canFrame)) {
                         return Status::ADDRESS_ENCODE_ERROR;
                 }
 
@@ -809,7 +814,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 }
 
                 // Address as received in the CAN frame frame.
-                auto theirAddress = AddressResolver::fromFrame (*frame);
+                auto theirAddress = AddressEncoderT::fromFrame (*frame);
 
                 // TODO encapsulate
                 if (!theirAddress || theirAddress->txId != myAddress.rxId) {
@@ -876,7 +881,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
                 CanFrameWrapperType canFrame (0x00, true, (int (IsoNPduType::CONSECUTIVE_FRAME) << 4) | sequenceNumber);
 
-                if (!AddressResolver::toFrame (myAddress, canFrame)) {
+                if (!AddressEncoderT::toFrame (myAddress, canFrame)) {
                         return Status::ADDRESS_ENCODE_ERROR;
                 }
 

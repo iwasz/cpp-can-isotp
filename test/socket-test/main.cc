@@ -131,7 +131,13 @@ int main ()
         int socketFd = createSocket ();
 
         auto tp = create<can_frame, Extended29AddressEncoder> (
-                Address{0x789abc, 0x123456, 0xaa, 0x55},
+                // Address{0x456, 0x123}, // Normal11
+                // Address{0x789ABC, 0x123456}, // Normal29
+                // Address{0x00, 0x00, 0x22, 0x11}, // NormalFixed29
+                // Address{0x456, 0x123, 0xaa, 0x55}, // Extended11
+                Address{0x789ABC, 0x123456, 0xaa, 0x55}, // Extended29
+                // Address{0x00, 0x00, 0x22, 0x11, 0x99}, // Mixed29
+                // Address{0x456, 0x123, 0x00, 0x00, 0x99}, // Mixed11
                 [] (auto const &tm) {
                         std::transform (std::begin (tm), std::end (tm), std::ostream_iterator<char> (std::cout), [] (auto b) {
                                 static_assert (std::is_same<decltype (b), uint8_t>::value);

@@ -116,6 +116,9 @@ struct Normal11AddressEncoder {
                 f.setExtended (false);
                 return true;
         }
+
+        /// Implements address matching for this type of addressing.
+        static bool matches (Address const &theirs, Address const &ours) { return theirs.txId == ours.rxId; }
 };
 
 /****************************************************************************/
@@ -149,6 +152,9 @@ struct Normal29AddressEncoder {
                 f.setExtended (true);
                 return true;
         }
+
+        /// Implements address matching for this type of addressing.
+        static bool matches (Address const &theirs, Address const &ours) { return theirs.txId == ours.rxId; }
 };
 
 /****************************************************************************/
@@ -173,7 +179,7 @@ struct NormalFixed29AddressEncoder {
                         return {};
                 }
 
-                return Address (fId & N_SA_MASK, (fId & N_TA_MASK) >> 8, Address::MessageType::DIAGNOSTICS,
+                return Address (0x00, 0x00, fId & N_SA_MASK, (fId & N_TA_MASK) >> 8, Address::MessageType::DIAGNOSTICS,
                                 (bool (fId & N_TATYPE_MASK)) ? (Address::TargetAddressType::FUNCTIONAL)
                                                              : (Address::TargetAddressType::PHYSICAL));
         }
@@ -183,17 +189,16 @@ struct NormalFixed29AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                if (a.rxId > MAX_N || a.txId > MAX_N) {
-                        return false;
-                }
-
                 f.setId (NORMAL_FIXED_29_MASK | ((a.targetAddressType == Address::TargetAddressType::FUNCTIONAL) ? (N_TATYPE_MASK) : (0))
-                         | a.txId << 8 | a.rxId);
+                         | a.targetAddress << 8 | a.sourceAddress);
 
                 f.setExtended (true);
 
                 return true;
         }
+
+        /// Implements address matching for this type of addressing.
+        static bool matches (Address const &theirs, Address const &ours) { return theirs.targetAddress == ours.sourceAddress; }
 };
 
 /****************************************************************************/
@@ -205,6 +210,10 @@ struct Extended11AddressEncoder {
         template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
+
+                if (fId > MAX_11_ID) {
+                        return {};
+                }
 
                 if (f.isExtended () || fId > MAX_11_ID || f.getDlc () < 1) {
                         return {};
@@ -229,7 +238,15 @@ struct Extended11AddressEncoder {
                 f.set (0, a.targetAddress);
                 return true;
         }
+
+        /// Implements address matching for this type of addressing.
+        static bool matches (Address const &theirs, Address const &ours)
+        {
+                return theirs.txId == ours.rxId && theirs.targetAddress == ours.sourceAddress;
+        }
 };
+
+/****************************************************************************/
 
 struct Extended29AddressEncoder {
 
@@ -238,6 +255,10 @@ struct Extended29AddressEncoder {
         template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
+
+                if (fId > MAX_29_ID) {
+                        return {};
+                }
 
                 if (!f.isExtended () || fId > MAX_29_ID || f.getDlc () < 1) {
                         return {};
@@ -262,6 +283,121 @@ struct Extended29AddressEncoder {
                 f.set (0, a.targetAddress);
                 return true;
         }
+
+        /// Implements address matching for this type of addressing.
+        static bool matches (Address const &theirs, Address const &ours)
+        {
+                return theirs.txId == ours.rxId && theirs.targetAddress == ours.sourceAddress;
+        }
+};
+
+/****************************************************************************/
+
+struct Mixed11AddressEncoder {
+
+        /**
+         * Create an address from a received CAN frame. This is
+         * the address which the remote party used to send the frame to us.
+         */
+        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        {
+                if (f.isExtended () || f.getDlc () < 1 || f.getId () > MAX_11_ID) {
+                        return {};
+                }
+
+                return Address (0x00, f.getId (), 0x00, 0x00, f.get (0), Address::MessageType::REMOTE_DIAGNOSTICS);
+        }
+
+        /**
+         * Store address into a CAN frame. This is the address of the remote party we want the message to get to.
+         */
+        template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
+        {
+                // if (a.messageType != Address::MessageType::REMOTE_DIAGNOSTICS) {
+                //         return false;
+                // }
+                if (a.txId > MAX_11_ID) {
+                        return false;
+                }
+
+                f.setId (a.txId);
+
+                if (f.getDlc () < 1) {
+                        f.setDlc (1);
+                }
+
+                f.set (0, a.networkAddressExtension);
+                f.setExtended (false);
+                return true;
+        }
+
+        /// Implements address matching for this type of addressing.
+        static bool matches (Address const &theirs, Address const &ours)
+        {
+                return theirs.txId == ours.rxId && theirs.networkAddressExtension == ours.networkAddressExtension;
+        }
+};
+
+/****************************************************************************/
+
+struct Mixed29AddressEncoder {
+
+        static constexpr uint32_t PHYS_29_MASK = 0x018Ce0000;
+        static constexpr uint32_t FUNC_29_MASK = 0x018Cd0000;
+        static constexpr uint32_t N_TA_MASK = 0x00000ff00;
+        static constexpr uint32_t N_SA_MASK = 0x0000000ff;
+
+        /**
+         * Create an address from a received CAN frame. This is
+         * the address which the remote party used to send the frame to us.
+         */
+        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        {
+                auto fId = f.getId ();
+
+                if (!f.isExtended () || f.getDlc () < 1) {
+                        return {};
+                }
+
+                if (bool ((fId & PHYS_29_MASK) == PHYS_29_MASK)) {
+                        return Address (0x00, 0x00, fId & N_SA_MASK, (fId & N_TA_MASK) >> 8, f.get (0), Address::MessageType::REMOTE_DIAGNOSTICS,
+                                        Address::TargetAddressType::PHYSICAL);
+                }
+
+                if (bool ((fId & FUNC_29_MASK) == FUNC_29_MASK)) {
+                        return Address (0x00, 0x00, fId & N_SA_MASK, (fId & N_TA_MASK) >> 8, f.get (0), Address::MessageType::REMOTE_DIAGNOSTICS,
+                                        Address::TargetAddressType::FUNCTIONAL);
+                }
+
+                return {};
+        }
+
+        /**
+         * Store address into a CAN frame. This is the address of the remote party we want the message to get to.
+         */
+        template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
+        {
+                // if (a.messageType != Address::MessageType::REMOTE_DIAGNOSTICS) {
+                //         return false;
+                // }
+
+                f.setId (((a.targetAddressType == Address::TargetAddressType::PHYSICAL) ? (PHYS_29_MASK) : (FUNC_29_MASK)) | a.targetAddress << 8
+                         | a.sourceAddress);
+
+                if (f.getDlc () < 1) {
+                        f.setDlc (1);
+                }
+
+                f.set (0, a.networkAddressExtension);
+                f.setExtended (true);
+                return true;
+        }
+
+        /// Implements address matching for this type of addressing.
+        static bool matches (Address const &theirs, Address const &ours)
+        {
+                return theirs.targetAddress == ours.sourceAddress && theirs.networkAddressExtension == ours.networkAddressExtension;
+        }
 };
 
 /**
@@ -283,13 +419,6 @@ template <typename T> struct AddressTraitsBase {
         }
         template <typename CFWrapper> static uint8_t getSerialNumber (CFWrapper const &f) { return getNPciByte (f) & 0x0f; }
         template <typename CFWrapper> static FlowStatus getFlowStatus (CFWrapper const &f) { return FlowStatus (getNPciByte (f) & 0x0f); }
-
-        // TODO. What these are for?
-        // static uint8_t getBlockSize (CFWrapper const &f) { return f.get (N_PCI_OFSET) + 1); }
-        // static uint8_t getSeparationTime (CFWrapper const &f) { return f.get (N_PCI_OFSET) + 2); }
-
-        // template <typename CFWrapper> static uint8_t get (CFWrapper const &f, size_t i) { return gsl::at (f.data, i + N_PCI_OFSET); }
-        // template <typename CFWrapper> static void set (CFWrapper const &f, size_t i, uint8_t b) { gsl::at (f.data, i + N_PCI_OFSET) = b; }
 };
 
 template <typename AddressEncoder> struct AddressTraits : public AddressTraitsBase<AddressTraits<AddressEncoder>> {
@@ -300,7 +429,15 @@ template <> struct AddressTraits<Extended11AddressEncoder> : public AddressTrait
         static constexpr bool USING_EXTENDED = true;
 };
 
-template <> struct AddressTraits<Extended29AddressEncoder> : public AddressTraitsBase<AddressTraits<Extended11AddressEncoder>> {
+template <> struct AddressTraits<Extended29AddressEncoder> : public AddressTraitsBase<AddressTraits<Extended29AddressEncoder>> {
+        static constexpr bool USING_EXTENDED = true;
+};
+
+template <> struct AddressTraits<Mixed11AddressEncoder> : public AddressTraitsBase<AddressTraits<Mixed11AddressEncoder>> {
+        static constexpr bool USING_EXTENDED = true;
+};
+
+template <> struct AddressTraits<Mixed29AddressEncoder> : public AddressTraitsBase<AddressTraits<Mixed29AddressEncoder>> {
         static constexpr bool USING_EXTENDED = true;
 };
 
