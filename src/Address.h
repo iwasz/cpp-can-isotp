@@ -14,6 +14,9 @@
 
 namespace tp {
 
+static constexpr uint32_t MAX_11_ID = 0x7ff;
+static constexpr uint32_t MAX_29_ID = 0x1FFFFFFF;
+
 /**
  * This is the address class which represents ISO TP addresses. It lives in
  * slihtly higher level of abstraction than addresses describved in the ISO
@@ -39,25 +42,40 @@ struct Address {
 
         Address () = default;
 
-        Address (uint32_t localAddress, uint32_t remoteAddress, MessageType mt = MessageType::DIAGNOSTICS,
-                 TargetAddressType tat = TargetAddressType::PHYSICAL)
-            : localAddress (localAddress), remoteAddress (remoteAddress), messageType (mt), targetAddressType (tat)
+        Address (uint32_t rxId, uint32_t txId, MessageType mt = MessageType::DIAGNOSTICS, TargetAddressType tat = TargetAddressType::PHYSICAL)
+            : rxId (rxId), txId (txId), messageType (mt), targetAddressType (tat)
         {
         }
 
-        // Type addressType{};
+        Address (uint32_t rxId, uint32_t txId, uint8_t sourceAddress, uint8_t targetAddress, MessageType mt = MessageType::DIAGNOSTICS,
+                 TargetAddressType tat = TargetAddressType::PHYSICAL)
+            : rxId (rxId), txId (txId), sourceAddress (sourceAddress), targetAddress (targetAddress), messageType (mt), targetAddressType (tat)
+        {
+        }
+
+        Address (uint32_t rxId, uint32_t txId, uint8_t sourceAddress, uint8_t targetAddress, uint8_t networkAddressExtension,
+                 MessageType mt = MessageType::DIAGNOSTICS, TargetAddressType tat = TargetAddressType::PHYSICAL)
+            : rxId (rxId),
+              txId (txId),
+              sourceAddress (sourceAddress),
+              targetAddress (targetAddress),
+              networkAddressExtension (networkAddressExtension),
+              messageType (mt),
+              targetAddressType (tat)
+        {
+        }
+
+        uint32_t rxId{};
+        uint32_t txId{};
 
         /// 5.3.2.2 N_SA encodes the network sender address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
-        // uint8_t sourceAddress{};
+        uint8_t sourceAddress{};
 
         /// 5.3.2.3 N_TA encodes the network target address. Valid both for DIAGNOSTICS and REMOTE_DIAGNOSTICS.
-        // uint8_t targetAddress{};
+        uint8_t targetAddress{};
 
         /// 5.3.2.5 N_AE Network address extension.
-        // uint8_t networkAddressExtension{};
-
-        uint32_t localAddress{};
-        uint32_t remoteAddress{};
+        uint8_t networkAddressExtension{};
 
         /// 5.3.1
         MessageType messageType{MessageType::DIAGNOSTICS};
@@ -70,8 +88,6 @@ struct Address {
 
 struct Normal11AddressEncoder {
 
-        static constexpr uint32_t MAX_N = 0x7ff;
-
         /**
          * Create an address from a received CAN frame. This is
          * the address which the remote party used to send the frame to us.
@@ -80,7 +96,7 @@ struct Normal11AddressEncoder {
         {
                 auto fId = f.getId ();
 
-                if (f.isExtended () || fId > MAX_N) {
+                if (f.isExtended () || fId > MAX_11_ID) {
                         return {};
                 }
 
@@ -92,11 +108,11 @@ struct Normal11AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                if (a.remoteAddress > MAX_N) {
+                if (a.txId > MAX_11_ID) {
                         return false;
                 }
 
-                f.setId (a.remoteAddress);
+                f.setId (a.txId);
                 f.setExtended (false);
                 return true;
         }
@@ -106,8 +122,6 @@ struct Normal11AddressEncoder {
 
 struct Normal29AddressEncoder {
 
-        static constexpr uint32_t MAX_N = 0x1FFFFFFF;
-
         /**
          * Create an address from a received CAN frame. This is
          * the address which the remote party used to send the frame to us.
@@ -116,7 +130,7 @@ struct Normal29AddressEncoder {
         {
                 auto fId = f.getId ();
 
-                if (!f.isExtended () || fId > MAX_N) {
+                if (!f.isExtended () || fId > MAX_29_ID) {
                         return {};
                 }
                 return Address (0x00, fId);
@@ -127,11 +141,11 @@ struct Normal29AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                if (a.remoteAddress > MAX_N) {
+                if (a.txId > MAX_29_ID) {
                         return false;
                 }
 
-                f.setId (a.remoteAddress);
+                f.setId (a.txId);
                 f.setExtended (true);
                 return true;
         }
@@ -169,12 +183,12 @@ struct NormalFixed29AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                if (a.localAddress > MAX_N || a.remoteAddress > MAX_N) {
+                if (a.rxId > MAX_N || a.txId > MAX_N) {
                         return false;
                 }
 
                 f.setId (NORMAL_FIXED_29_MASK | ((a.targetAddressType == Address::TargetAddressType::FUNCTIONAL) ? (N_TATYPE_MASK) : (0))
-                         | a.remoteAddress << 8 | a.localAddress);
+                         | a.txId << 8 | a.rxId);
 
                 f.setExtended (true);
 
@@ -186,35 +200,66 @@ struct NormalFixed29AddressEncoder {
 
 struct Extended11AddressEncoder {
 
-        static constexpr uint32_t MAX_ID = 0x7ff;
         static constexpr uint32_t MAX_TA = 0xff;
 
         template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
 
-                if (f.isExtended () || fId > MAX_ID || f.getDlc () < 1) {
+                if (f.isExtended () || fId > MAX_11_ID || f.getDlc () < 1) {
                         return {};
                 }
 
-                uint8_t nTa = f.get (0);
-                return Address (fId, nTa);
+                return Address (0x00, fId, 0x00, f.get (0));
         }
 
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                if (a.remoteAddress > MAX_TA || a.localAddress > MAX_ID) {
+                if (a.txId > MAX_11_ID) {
                         return false;
                 }
 
-                f.setId (a.localAddress);
+                f.setId (a.txId);
                 f.setExtended (false);
 
                 if (f.getDlc () < 1) {
                         f.setDlc (1);
                 }
 
-                f.set (0, a.remoteAddress);
+                f.set (0, a.targetAddress);
+                return true;
+        }
+};
+
+struct Extended29AddressEncoder {
+
+        static constexpr uint32_t MAX_TA = 0xff;
+
+        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        {
+                auto fId = f.getId ();
+
+                if (!f.isExtended () || fId > MAX_29_ID || f.getDlc () < 1) {
+                        return {};
+                }
+
+                return Address (0x00, fId, 0x00, f.get (0));
+        }
+
+        template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
+        {
+                if (a.txId > MAX_29_ID) {
+                        return false;
+                }
+
+                f.setId (a.txId);
+                f.setExtended (true);
+
+                if (f.getDlc () < 1) {
+                        f.setDlc (1);
+                }
+
+                f.set (0, a.targetAddress);
                 return true;
         }
 };
@@ -252,6 +297,10 @@ template <typename AddressEncoder> struct AddressTraits : public AddressTraitsBa
 };
 
 template <> struct AddressTraits<Extended11AddressEncoder> : public AddressTraitsBase<AddressTraits<Extended11AddressEncoder>> {
+        static constexpr bool USING_EXTENDED = true;
+};
+
+template <> struct AddressTraits<Extended29AddressEncoder> : public AddressTraitsBase<AddressTraits<Extended11AddressEncoder>> {
         static constexpr bool USING_EXTENDED = true;
 };
 

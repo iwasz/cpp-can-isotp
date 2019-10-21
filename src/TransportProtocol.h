@@ -446,7 +446,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
         Address const &outgoingAddress = myAddress;
 
         // Check if the received frame is meant for us.
-        if (!theirAddress || theirAddress->remoteAddress != myAddress.localAddress) {
+        if (!theirAddress || theirAddress->txId != myAddress.rxId) {
                 return false;
         }
 
@@ -812,7 +812,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 auto theirAddress = AddressResolver::fromFrame (*frame);
 
                 // TODO encapsulate
-                if (!theirAddress || theirAddress->remoteAddress != myAddress.localAddress) {
+                if (!theirAddress || theirAddress->txId != myAddress.rxId) {
                         break;
                 }
 
