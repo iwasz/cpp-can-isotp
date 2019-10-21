@@ -154,12 +154,29 @@ TEST_CASE ("NormalFixed29 encode", "[address]")
                 REQUIRE (cfw.getId () == ((0b110 << 26) | (218 << 16) | (0x34 << 8) | 0x12));
                 REQUIRE (cfw.isExtended ());
         }
+
+        {
+                // Max
+                CanFrameWrapper<CanFrame> cfw{CanFrame ()};
+                REQUIRE (NormalFixed29AddressEncoder::toFrame (
+                        Address (0xfe, 0xff, Address::MessageType::DIAGNOSTICS, Address::TargetAddressType::PHYSICAL), cfw));
+
+                REQUIRE (cfw.getId () == ((0b110 << 26) | (218 << 16) | (0xff << 8) | 0xfe));
+                REQUIRE (cfw.isExtended ());
+        }
+
+        {
+                // Too big
+                CanFrameWrapper<CanFrame> cfw{CanFrame ()};
+                REQUIRE (!NormalFixed29AddressEncoder::toFrame (
+                        Address (0xfe, 0x100, Address::MessageType::DIAGNOSTICS, Address::TargetAddressType::PHYSICAL), cfw));
+        }
 }
 
 TEST_CASE ("NormalFixed29 decode", "[address]")
 {
         {
-                // Simple address
+                // Simple address (Physical)
                 CanFrameWrapper<CanFrame> cfw{CanFrame ()};
                 cfw.setId ((0b110 << 26) | (218 << 16) | (0x34 << 8) | 0x12);
                 cfw.setExtended (true);
@@ -167,5 +184,54 @@ TEST_CASE ("NormalFixed29 decode", "[address]")
                 REQUIRE (a);
                 REQUIRE (a->localAddress == 0x12);
                 REQUIRE (a->remoteAddress == 0x34);
+                REQUIRE (a->targetAddressType == Address::TargetAddressType::PHYSICAL);
+        }
+
+        {
+                // Simple address (Functional)
+                CanFrameWrapper<CanFrame> cfw{CanFrame ()};
+                cfw.setId ((0b110 << 26) | (219 << 16) | (0x34 << 8) | 0x12);
+                cfw.setExtended (true);
+                auto a = NormalFixed29AddressEncoder::fromFrame (cfw);
+                REQUIRE (a);
+                REQUIRE (a->localAddress == 0x12);
+                REQUIRE (a->remoteAddress == 0x34);
+                REQUIRE (a->targetAddressType == Address::TargetAddressType::FUNCTIONAL);
+        }
+
+        {
+                // Max
+                CanFrameWrapper<CanFrame> cfw{CanFrame ()};
+                cfw.setId ((0b110 << 26) | (218 << 16) | (0xff << 8) | 0xfe);
+                cfw.setExtended (true);
+                auto a = NormalFixed29AddressEncoder::fromFrame (cfw);
+                REQUIRE (a);
+                REQUIRE (a->localAddress == 0xfe);
+                REQUIRE (a->remoteAddress == 0xff);
+                REQUIRE (a->targetAddressType == Address::TargetAddressType::PHYSICAL);
+        }
+
+        {
+                // malformed
+                CanFrameWrapper<CanFrame> cfw{CanFrame ()};
+                cfw.setId ((0b100 << 26) | (218 << 16) | (0xff << 8) | 0xfe);
+                cfw.setExtended (true);
+                REQUIRE (!NormalFixed29AddressEncoder::fromFrame (cfw));
+        }
+
+        {
+                // malformed 2
+                CanFrameWrapper<CanFrame> cfw{CanFrame ()};
+                cfw.setId ((0b110 << 26) | (228 << 16) | (0xff << 8) | 0xfe);
+                cfw.setExtended (true);
+                REQUIRE (!NormalFixed29AddressEncoder::fromFrame (cfw));
+        }
+
+        {
+                // 11 instead of 29
+                CanFrameWrapper<CanFrame> cfw{CanFrame ()};
+                cfw.setId ((0b1010 << 26) | (218 << 16) | (0xff << 8) | 0xfe);
+                cfw.setExtended (false);
+                REQUIRE (!NormalFixed29AddressEncoder::fromFrame (cfw));
         }
 }

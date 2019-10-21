@@ -130,8 +130,8 @@ int main ()
 
         int socketFd = createSocket ();
 
-        auto tp = create<can_frame, NormalFixed29AddressEncoder> (
-                Address (0x34, 0x12),
+        auto tp = create<can_frame, Extended11AddressEncoder> (
+                Address (0xaa, 0x55),
                 [] (auto const &tm) {
                         std::transform (std::begin (tm), std::end (tm), std::ostream_iterator<char> (std::cout), [] (auto b) {
                                 static_assert (std::is_same<decltype (b), uint8_t>::value);

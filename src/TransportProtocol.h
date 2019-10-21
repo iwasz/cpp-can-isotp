@@ -81,6 +81,7 @@ public:
         using Callback = typename TraitsT::Callback;
         using CanFrameWrapperType = CanFrameWrapper<CanFrame>;
         using AddressResolver = typename TraitsT::AddressResolver;
+        using AddressTraitsT = AddressTraits<AddressResolver>;
 
         /// Max allowed by the ISO standard.
         static constexpr int MAX_ALLOWED_ISO_MESSAGE_SIZE = 4095;
@@ -165,22 +166,22 @@ public:
         /*---------------------------------------------------------------------------*/
 
         /// Can Ext Addr setter
-        void setCanExtAddr (uint8_t u);
+        // void setCanExtAddr (uint8_t u);
 
         /// Can Ext Addr getter
-        uint8_t getCanExtAddr () const { return canExtAddr; }
-        bool isCanExtAddrActive () const { return canExtAddrActive; }
+        // uint8_t getCanExtAddr () const { return canExtAddr; }
+        // bool isCanExtAddrActive () const { return canExtAddrActive; }
 
         /**
-         * Default address is used during reception
-         * - target address of incoming message is checked with defaultAddress.sourceAddress
-         * - flow control frames during reception are sent with defaultAddress.targetAddress.
+         * myAddress address is used during reception
+         * - target address of incoming message is checked with myAddress.sourceAddress
+         * - flow control frames during reception are sent with myAddress.targetAddress.
          * And during sending:
-         * - defaultAddress.targetAddress is used for outgoing frames if no address was specified during request (in send method).
-         * - defaultAddress.sourceAddress is checked with incoming flowFrames if no address was specified during request (in send method).
+         * - myAddress.targetAddress is used for outgoing frames if no address was specified during request (in send method).
+         * - myAddress.sourceAddress is checked with incoming flowFrames if no address was specified during request (in send method).
          */
         void setMyAddress (Address const &a) { myAddress = a; }
-        Address const &getDefaultAddress () const { return myAddress; }
+        Address const &getMyAddress () const { return myAddress; }
 
 private:
         static uint32_t now ()
@@ -381,7 +382,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
         }
 
         // 6 or 7 depending on addressing used
-        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (isCanExtAddrActive ());
+        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (AddressTraitsT::USING_EXTENDED);
 
         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
                 return sendSingleFrame (a, msg);
@@ -436,13 +437,6 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames 
         return true;
 }
 
-// TODO I wouldn't multiply those methods but rather use perfect forwarding magic (?)
-// template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (const Address &a, IsoMessageT &&msg)
-// {
-//         stateMachine = StateMachine{outputInterface, a, msg};
-//         return true;
-// }
-
 /*****************************************************************************/
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (const CanFrameWrapperType &frame)
@@ -456,13 +450,13 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 return false;
         }
 
-        switch (frame.getType ()) {
+        switch (AddressTraitsT::getType (frame)) {
         case IsoNPduType::SINGLE_FRAME: {
                 TransportMessage message;
-                int singleFrameLen = frame.getDataLengthS ();
+                int singleFrameLen = AddressTraitsT::getDataLengthS (frame);
 
                 // Error situation. Such frames should be ignored according to 6.5.2.2 page 24.
-                if (singleFrameLen <= 0 || (isCanExtAddrActive () && singleFrameLen > 6) || singleFrameLen > 7) {
+                if (singleFrameLen <= 0 || (AddressTraitsT::USING_EXTENDED && singleFrameLen > 6) || singleFrameLen > 7) {
                         return false;
                 }
 
@@ -479,16 +473,16 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         break;
                 }
 
-                uint8_t dataOffset = frame.getNPciOffset () + 1;
+                uint8_t dataOffset = AddressTraitsT::N_PCI_OFSET + 1;
                 message.append (frame, dataOffset, singleFrameLen);
                 indication (*theirAddress, message.data, Result::N_OK);
         } break;
 
         case IsoNPduType::FIRST_FRAME: {
-                uint16_t multiFrameRemainingLen = frame.getDataLengthF ();
+                uint16_t multiFrameRemainingLen = AddressTraitsT::getDataLengthF (frame);
 
                 // Error situation. Such frames should be ignored according to ISO.
-                if (multiFrameRemainingLen < 8 || (isCanExtAddrActive () && multiFrameRemainingLen < 7)) {
+                if (multiFrameRemainingLen < 8 || (AddressTraitsT::USING_EXTENDED && multiFrameRemainingLen < 7)) {
                         return false;
                 }
 
@@ -509,7 +503,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         stack.removeMessage (isoMessage);
                 }
 
-                int firstFrameLen = (isCanExtAddrActive ()) ? (5) : (6);
+                int firstFrameLen = (AddressTraitsT::USING_EXTENDED) ? (5) : (6);
                 isoMessage = stack.addMessage (frame.getId () /*, multiFrameRemainingLen*/);
 
                 if (!isoMessage) {
@@ -522,7 +516,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 isoMessage->currentSn = 1;
                 isoMessage->multiFrameRemainingLen = multiFrameRemainingLen - firstFrameLen;
                 isoMessage->timer.start (N_BS_TIMEOUT);
-                uint8_t dataOffset = frame.getNPciOffset () + 2;
+                uint8_t dataOffset = AddressTraitsT::N_PCI_OFSET + 2;
                 isoMessage->append (frame, dataOffset, firstFrameLen);
 
                 // Send Flow Control
@@ -545,7 +539,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 isoMessage->timer.start (N_CR_TIMEOUT);
 
-                if (frame.getSerialNumber () != isoMessage->currentSn) {
+                if (AddressTraitsT::getSerialNumber (frame) != isoMessage->currentSn) {
                         // 6.5.4.3 SN error handling
                         indication (*theirAddress, {}, Result::N_WRONG_SN);
                         return false;
@@ -553,14 +547,14 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 ++(isoMessage->currentSn);
                 isoMessage->currentSn %= 16;
-                int maxConsecutiveFrameLen = (isCanExtAddrActive ()) ? (6) : (7);
+                int maxConsecutiveFrameLen = (AddressTraitsT::USING_EXTENDED) ? (6) : (7);
                 int consecutiveFrameLen = std::min (maxConsecutiveFrameLen, isoMessage->multiFrameRemainingLen);
                 isoMessage->multiFrameRemainingLen -= consecutiveFrameLen;
 #if 0                
                 fmt::print ("Bytes left : {}\n", isoMessage->multiFrameRemainingLen);
 #endif
 
-                uint8_t dataOffset = frame.getNPciOffset () + 1;
+                uint8_t dataOffset = AddressTraitsT::N_PCI_OFSET + 1;
                 isoMessage->append (frame, dataOffset, consecutiveFrameLen);
 
                 if (isoMessage->multiFrameRemainingLen) {
@@ -613,19 +607,19 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::run ()
 
 /*****************************************************************************/
 
-template <typename TraitsT> void TransportProtocol<TraitsT>::setCanExtAddr (uint8_t u)
-{
-        canExtAddrActive = true;
-        canExtAddr = u;
-}
+// template <typename TraitsT> void TransportProtocol<TraitsT>::setCanExtAddr (uint8_t u)
+// {
+//         canExtAddrActive = true;
+//         canExtAddr = u;
+// }
 
 /*****************************************************************************/
 
-template <typename TraitsT> uint32_t TransportProtocol<TraitsT>::getID (bool extended) const
-{
-        // ISO 15765-4:2005 chapter 6.3.2.2 & 6.3.2.3
-        return (extended) ? (0x18db33f1) : (0x7df);
-}
+// template <typename TraitsT> uint32_t TransportProtocol<TraitsT>::getID (bool extended) const
+// {
+//         // ISO 15765-4:2005 chapter 6.3.2.2 & 6.3.2.3
+//         return (extended) ? (0x18db33f1) : (0x7df);
+// }
 
 /*****************************************************************************/
 
@@ -638,10 +632,10 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendFlowFrame (Addr
                 return false;
         }
 
-        fcCanFrame.set (0, (uint8_t (IsoNPduType::FLOW_FRAME) << 4) | uint8_t (fs));
-        fcCanFrame.set (1, 0); // BS
-        fcCanFrame.set (2, 0); // Stmin
-        fcCanFrame.setDlc (3);
+        fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 0, (uint8_t (IsoNPduType::FLOW_FRAME) << 4) | uint8_t (fs));
+        fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 1, 0); // BS
+        fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 2, 0); // Stmin
+        fcCanFrame.setDlc (3 + AddressTraitsT::N_PCI_OFSET);
 
         if (!outputInterface (fcCanFrame.value ())) {
                 errorHandler (Status::SEND_FAILED);
@@ -765,10 +759,11 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 state = State::DONE;
         }
 
-        // IsoMessage *message = (messagePtr) ?( messagePtr ): &message;
         IsoMessage *message = &this->message;
 
         uint16_t isoMessageSize = message->size ();
+
+        using Traits = AddressTraits<AddressResolver>;
 
         switch (state) {
         case State::IDLE:
@@ -821,13 +816,13 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                         break;
                 }
 
-                IsoNPduType type = frame->getType ();
+                IsoNPduType type = Traits::getType (*frame);
 
                 if (type != IsoNPduType::FLOW_FRAME) {
                         break;
                 }
 
-                FlowStatus fs = frame->getFlowStatus ();
+                FlowStatus fs = Traits::getFlowStatus (*frame);
 
                 if (fs != FlowStatus::CONTINUE_TO_SEND && fs != FlowStatus::WAIT && fs != FlowStatus::OVERFLOW) {
                         // TODO confirm (Address{}, Result::N_INVALID_FS); // 6.5.5.3

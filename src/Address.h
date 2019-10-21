@@ -155,7 +155,7 @@ struct NormalFixed29AddressEncoder {
         {
                 auto fId = f.getId ();
 
-                if (!f.isExtended () || !bool (fId & NORMAL_FIXED_29_MASK)) {
+                if (!f.isExtended () || bool ((fId & NORMAL_FIXED_29_MASK) != NORMAL_FIXED_29_MASK)) {
                         return {};
                 }
 
@@ -180,6 +180,79 @@ struct NormalFixed29AddressEncoder {
 
                 return true;
         }
+};
+
+/****************************************************************************/
+
+struct Extended11AddressEncoder {
+
+        static constexpr uint32_t MAX_ID = 0x7ff;
+        static constexpr uint32_t MAX_TA = 0xff;
+
+        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        {
+                auto fId = f.getId ();
+
+                if (f.isExtended () || fId > MAX_ID || f.getDlc () < 1) {
+                        return {};
+                }
+
+                uint8_t nTa = f.get (0);
+                return Address (fId, nTa);
+        }
+
+        template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
+        {
+                if (a.remoteAddress > MAX_TA || a.localAddress > MAX_ID) {
+                        return false;
+                }
+
+                f.setId (a.localAddress);
+                f.setExtended (false);
+
+                if (f.getDlc () < 1) {
+                        f.setDlc (1);
+                }
+
+                f.set (0, a.remoteAddress);
+                return true;
+        }
+};
+
+/**
+ * Helper class
+ */
+template <typename T> struct AddressTraitsBase {
+
+        static constexpr uint8_t N_PCI_OFSET = (T::USING_EXTENDED) ? (1) : (0);
+
+        template <typename CFWrapper> static uint8_t getNPciByte (CFWrapper const &f) { return f.get (N_PCI_OFSET); }
+        template <typename CFWrapper> static IsoNPduType getType (CFWrapper const &f) { return IsoNPduType ((getNPciByte (f) & 0xF0) >> 4); }
+
+        /*---------------------------------------------------------------------------*/
+
+        template <typename CFWrapper> static uint8_t getDataLengthS (CFWrapper const &f) { return getNPciByte (f) & 0x0f; }
+        template <typename CFWrapper> static uint16_t getDataLengthF (CFWrapper const &f)
+        {
+                return ((getNPciByte (f) & 0x0f) << 8) | f.get (N_PCI_OFSET + 1);
+        }
+        template <typename CFWrapper> static uint8_t getSerialNumber (CFWrapper const &f) { return getNPciByte (f) & 0x0f; }
+        template <typename CFWrapper> static FlowStatus getFlowStatus (CFWrapper const &f) { return FlowStatus (getNPciByte (f) & 0x0f); }
+
+        // TODO. What these are for?
+        // static uint8_t getBlockSize (CFWrapper const &f) { return f.get (N_PCI_OFSET) + 1); }
+        // static uint8_t getSeparationTime (CFWrapper const &f) { return f.get (N_PCI_OFSET) + 2); }
+
+        // template <typename CFWrapper> static uint8_t get (CFWrapper const &f, size_t i) { return gsl::at (f.data, i + N_PCI_OFSET); }
+        // template <typename CFWrapper> static void set (CFWrapper const &f, size_t i, uint8_t b) { gsl::at (f.data, i + N_PCI_OFSET) = b; }
+};
+
+template <typename AddressEncoder> struct AddressTraits : public AddressTraitsBase<AddressTraits<AddressEncoder>> {
+        static constexpr bool USING_EXTENDED = false;
+};
+
+template <> struct AddressTraits<Extended11AddressEncoder> : public AddressTraitsBase<AddressTraits<Extended11AddressEncoder>> {
+        static constexpr bool USING_EXTENDED = true;
 };
 
 } // namespace tp
