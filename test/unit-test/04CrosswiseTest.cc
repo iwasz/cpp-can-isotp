@@ -73,9 +73,6 @@ TEST_CASE ("cross half-duplex 16B", "[crosswise]")
                         return true;
                 });
 
-        // Source address is 0x89, Target address is 0x12, .
-        tpR.setMyAddress (Address (0x89, 0x12));
-
         auto tpT = create (
                 Address (0x12, 0x89), [] (auto const & /*unused*/) {},
                 [&framesFromT] (auto const &canFrame) {
@@ -83,7 +80,6 @@ TEST_CASE ("cross half-duplex 16B", "[crosswise]")
                         return true;
                 });
 
-        // Target address is 0x89, source address is 0x12. We expect responses (FCs) with 0x12 address.
         tpT.send ({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15});
 
         while (tpT.isSending ()) {
@@ -111,7 +107,7 @@ TEST_CASE ("cross half-duplex 16B wrong source", "[crosswise]")
         bool called = false;
         // Target address is 0x12, source address is 0x89.
         auto tpR = create (
-                Address (0x12, 0x89), [&called] (auto const &isoMessage) { called = true; },
+                Address (0x12, 0x89), [&called] (auto const & /* isoMessage */) { called = true; },
                 [&framesFromR] (auto const &canFrame) {
                         framesFromR.push_back (canFrame);
                         return true;

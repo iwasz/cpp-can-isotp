@@ -30,9 +30,9 @@ void receivingAsyncCallback ()
  *
  * + Handle ISO messages that are constrained to less than maximum 4095B allowed by the
  * ISO document.
- * - Przejechać walgrindem od czasu do czasu
- * - Optymalizacja, bo testy idą wolno!
- * - Test the above.
+ * - Test when ISO message is size-constrained.
+ * + Use valgrind in the unit-test binary from time to time.
+ * - Maybe optimize, but not so important.
  * + It is possible to define a TP object without a defazult address and then use its send
  * method also without an address. This way you are sending a message into oblivion. Have
  * it sorted out.

@@ -177,7 +177,11 @@ public:
          * Paragraph 6.5.5.5 in the 2004 ISO document. Default value 0 means that everything
          * has to be sent immediately.
          */
-        void setSeparationTime (uint8_t s) { separationTime = s; }
+        void setSeparationTime (uint8_t s)
+        {
+                Expects ((s >= 0 && s <= 0x7f) || (s >= 0xf1 && s <= 0xf9));
+                separationTime = s;
+        }
 
         /**
          * This value will be sent in first flow control flow frame, and it tells the peer
@@ -247,12 +251,11 @@ private:
                 int append (CanFrameWrapperType const &frame, size_t offset, size_t len);
 
                 // uint32_t address = 0; /// Address Information M_AI
-                IsoMessageT data; /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
-                TransportMessage *prev = nullptr; /// Double linked list implementation.
-                TransportMessage *next = nullptr; /// Double linked list implementation.
-                int multiFrameRemainingLen = 0;   /// For tracking number of bytes remaining.
-                int currentSn = 0;                /// Sequence number of Consecutive Frame.
-                Timer timer;                      /// For tracking time between first and consecutive frames with the same address.
+                IsoMessageT data{};           /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
+                int multiFrameRemainingLen{}; /// For tracking number of bytes remaining.
+                int currentSn{};              /// Sequence number of Consecutive Frame.
+                int consecutiveFramesReceived{}; /// For comparison with block size.
+                Timer timer;                     /// For tracking time between first and consecutive frames with the same address.
         };
 
         /*
@@ -365,23 +368,6 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
         return sendMultipleFrames (a, std::move (msg));
         return true;
 }
-
-/*****************************************************************************/
-
-// template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address &a, gsl::not_null<IsoMessageT const *> msg)
-// {
-//         if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
-//                 return false;
-//         }
-//         // 6 or 7 depending on addressing used
-//         const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (isCanExtAddrActive ());
-//         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
-//                 return sendSingleFrame (a, msg);
-//         }
-//         // Send using multiple frames, state machine, and timing controll and whatnot.
-//         return sendMultipleFrames (a, msg);
-//         return true;
-// }
 
 /*****************************************************************************/
 
@@ -528,6 +514,17 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 uint8_t dataOffset = AddressTraitsT::N_PCI_OFSET + 1;
                 transportMessage.append (frame, dataOffset, consecutiveFrameLen);
 
+                // Send flow control frame.
+                if (blockSize > 0 && ++transportMessage.consecutiveFramesReceived >= blockSize) {
+                        transportMessage.consecutiveFramesReceived = 0;
+
+                        if (!sendFlowFrame (outgoingAddress, FlowStatus::CONTINUE_TO_SEND)) {
+                                indication (*theirAddress, {}, Result::N_ERROR);
+                                // Terminate the current reception of segmented message.
+                                transportMessagesMap.erase (transportMessagesMap.find (*theirAddress));
+                        }
+                }
+
                 if (transportMessage.multiFrameRemainingLen) {
                         return true;
                 }
@@ -573,7 +570,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::run ()
 
         // Run state machine(s) if any to perform transmission.
         if (Status s = stateMachine.run (); s != Status::OK) {
-                errorHandler (s);
+                errorHandler (s); // TODO not Status, but Error is the correct type
                 return;
         }
 }
@@ -722,8 +719,8 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 }
 
                 if (state == State::RECEIVE_FIRST_FLOW_CONTROL_FRAME) {
-                        blockSize = frame->get (1); // 6.5.5.4 page 21
-                        separationTimeUs = frame->get (2);
+                        blockSize = frame->get (1);        // 6.5.5.4 page 21 // TODO change name to receivedBlockSize
+                        separationTimeUs = frame->get (2); // TODO change name to receivedSeparationTimeUs
 
                         if (separationTimeUs >= 0 && separationTimeUs <= 0x7f) {
                                 separationTimeUs *= 1000; // Convert to µs
@@ -771,13 +768,15 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                         break;
                 }
 
-                if (blockSize && blocksSent++ >= blockSize) {
+                if (blockSize && ++blocksSent >= blockSize) {
                         state = State::RECEIVE_BS_FLOW_CONTROL_FRAME;
                         bsCrTimer.start (N_BS_TIMEOUT);
                         break;
                 }
 
-                separationTimer.start (separationTimeUs);
+                // TODO separationTimeUs should be in 100µs units. Now i have 1ms resolution, so f1-f9 STmin are rounded to 0
+                separationTimer.start (separationTimeUs / 1000);
+                bsCrTimer.start (N_CR_TIMEOUT);
                 break;
 
         } break;

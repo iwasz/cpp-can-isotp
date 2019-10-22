@@ -21,6 +21,7 @@ ADD_EXECUTABLE(unit-test
     "03CanFrameTest.cc"
     "04CrosswiseTest.cc"
     "05AddressTest.cc"
+    "06BsAndStTest.cc"
 )
 
 ADD_TEST (unit-test unit-test)
