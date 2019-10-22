@@ -62,7 +62,7 @@ void receivingAsyncCallback ()
  * TODO Include a note about N_As and NAr timeouts in the README.md. User shall check if sending
  * a single CAN frame took les than 1000ms + 50%. He should return false in that case, true otherwise.
  * - address all TODOs in the code.
- * - get rid of homeberew list, use etl.
+ * + get rid of homeberew list, use etl.
  *
  * TODO tests:
  * + Test instantiation and usage with other CanFrame type
@@ -119,7 +119,7 @@ void receivingAsyncCallback ()
  *  - implent (if not imlenmented already)
  *  - test
  *
- * - Get rid of dynamic allocation, because there is one.
+ * + Get rid of dynamic allocation, because there is one.
  * - Get rid of non English comments.
  */
 int main () { receivingAsyncCallback (); }

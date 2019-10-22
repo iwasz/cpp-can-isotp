@@ -12,14 +12,11 @@
 #include "MiscTypes.h"
 #include <chrono>
 #include <cstdint>
+#include <etl/map.h>
 #include <functional>
 #include <gsl/gsl>
-#include <iostream>
 #include <memory>
 #include <optional>
-#include <vector>
-
-#include <fmt/format.h>
 
 /**
  * Set maximum number of Flow Control frames with WAIT bit set that can be received
@@ -35,8 +32,8 @@ namespace tp {
 /**
  *
  */
-template <typename CanFrameT, typename IsoMessageT, size_t MAX_MESSAGE_SIZE_T, typename AddressResolverT, typename CanOutputInterfaceT,
-          typename TimeProviderT, typename ExceptionHandlerT, typename CallbackT>
+template <typename CanFrameT, typename IsoMessageT, size_t MAX_MESSAGE_SIZE_N, typename AddressResolverT, typename CanOutputInterfaceT,
+          typename TimeProviderT, typename ExceptionHandlerT, typename CallbackT, size_t MAX_INTERLEAVED_ISO_MESSAGES_N = 4>
 struct TransportProtocolTraits {
         using CanFrame = CanFrameT;
         using IsoMessageTT = IsoMessageT;
@@ -45,7 +42,8 @@ struct TransportProtocolTraits {
         using ErrorHandler = ExceptionHandlerT;
         using Callback = CallbackT;
         using AddressEncoderT = AddressResolverT;
-        static constexpr size_t MAX_MESSAGE_SIZE = MAX_MESSAGE_SIZE_T;
+        static constexpr size_t MAX_MESSAGE_SIZE = MAX_MESSAGE_SIZE_N;
+        static constexpr size_t MAX_INTERLEAVED_ISO_MESSAGES = MAX_INTERLEAVED_ISO_MESSAGES_N;
 };
 
 /*
@@ -85,14 +83,14 @@ public:
 
         /// Max allowed by the ISO standard.
         static constexpr int MAX_ALLOWED_ISO_MESSAGE_SIZE = 4095;
+        static constexpr size_t MAX_INTERLEAVED_ISO_MESSAGES = TraitsT::MAX_INTERLEAVED_ISO_MESSAGES;
 
         /// Max allowed by this implementation. Can be lowered if memory is scarce.
         static constexpr size_t MAX_ACCEPTED_ISO_MESSAGE_SIZE = TraitsT::MAX_MESSAGE_SIZE;
 
         TransportProtocol (Callback callback, CanOutputInterface outputInterface = {}, TimeProvider /*timeProvider*/ = {},
                            ErrorHandler errorHandler = {})
-            : stack{errorHandler},
-              callback{callback},
+            : callback{callback},
               outputInterface{outputInterface},
               //              timeProvider{ timeProvider },
               errorHandler{errorHandler},
@@ -102,8 +100,7 @@ public:
 
         TransportProtocol (Address myAddress, Callback callback, CanOutputInterface outputInterface = {}, TimeProvider /*timeProvider*/ = {},
                            ErrorHandler errorHandler = {})
-            : stack{errorHandler},
-              callback{callback},
+            : callback{callback},
               outputInterface{outputInterface},
               //              timeProvider{ timeProvider },
               errorHandler{errorHandler},
@@ -162,15 +159,6 @@ public:
          * nie wywołuje callbacku, tylko zapisuje wynik w tym obiekcie. To jest używane w connect.
          */
         bool onCanNewFrame (CanFrame const &f) { return onCanNewFrame (CanFrameWrapperType{f}); }
-
-        /*---------------------------------------------------------------------------*/
-
-        /// Can Ext Addr setter
-        // void setCanExtAddr (uint8_t u);
-
-        /// Can Ext Addr getter
-        // uint8_t getCanExtAddr () const { return canExtAddr; }
-        // bool isCanExtAddrActive () const { return canExtAddrActive; }
 
         /**
          * myAddress address is used during reception
@@ -258,35 +246,13 @@ private:
 
                 int append (CanFrameWrapperType const &frame, size_t offset, size_t len);
 
-                uint32_t address = 0; /// Address Information M_AI
-                IsoMessageT data;     /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
+                // uint32_t address = 0; /// Address Information M_AI
+                IsoMessageT data; /// Max 4095 (according to ISO 15765-2) or less if more strict requirements programmed by the user.
                 TransportMessage *prev = nullptr; /// Double linked list implementation.
                 TransportMessage *next = nullptr; /// Double linked list implementation.
                 int multiFrameRemainingLen = 0;   /// For tracking number of bytes remaining.
                 int currentSn = 0;                /// Sequence number of Consecutive Frame.
                 Timer timer;                      /// For tracking time between first and consecutive frames with the same address.
-        };
-
-        bool onCanNewFrame (CanFrameWrapperType const &frame);
-
-        /*
-         * Double linked list of ISO 15765-2 messages (up to 4095B long).
-         */
-        class TransportMessageList {
-        public:
-                enum { MAX_MESSAGE_NUM = 8 };
-                TransportMessageList (ErrorHandler &e) : first (nullptr), size (0), errorHandler (e) {}
-
-                TransportMessage *findMessage (uint32_t address);
-                TransportMessage *addMessage (uint32_t address /*, size_t bufferSize*/);
-                TransportMessage *removeMessage (TransportMessage *m);
-                size_t getSize () const { return size; }
-                TransportMessage *getFirst () { return first; }
-
-        private:
-                TransportMessage *first;
-                size_t size;
-                ErrorHandler &errorHandler;
         };
 
         /*
@@ -340,6 +306,10 @@ private:
 
         /*---------------------------------------------------------------------------*/
 
+        bool onCanNewFrame (CanFrameWrapperType const &frame);
+
+        /*---------------------------------------------------------------------------*/
+
         void confirm (Address const &a, Result r) {}
         void firstFrameIndication (Address const &a, uint16_t len) {}
         void indication (Address const &a, IsoMessageT const &msg, Result r) { callback (msg); /*TODO tidy up this mess with callbacks*/ }
@@ -351,7 +321,8 @@ private:
         bool sendSingleFrame (const Address &a, IsoMessageT const &msg);
         bool sendMultipleFrames (const Address &a, IsoMessageT &&msg);
 
-        TransportMessageList stack;
+private:
+        etl::map<Address, TransportMessage, MAX_INTERLEAVED_ISO_MESSAGES> transportMessagesMap;
         uint8_t blockSize{};
         uint8_t separationTime{};
         Callback callback;
@@ -462,16 +433,13 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         return false;
                 }
 
-                // TODO Proper addressing should be used.
-                TransportMessage *isoMessage = stack.findMessage (frame.getId ());
+                auto iter = transportMessagesMap.find (*theirAddress);
 
-                if (isoMessage != nullptr) {
+                if (iter != transportMessagesMap.cend ()) { // found
                         // As in 6.7.3 Table 18
-                        // TODO this API is inefficient, we create empty IsoMessageT objecyt (which possibly can allocate as much as 4095B) only
-                        // to discard it.
-                        indication (*theirAddress, {}, Result::N_UNEXP_PDU);
+                        indication (*theirAddress, iter->second.data, Result::N_UNEXP_PDU);
                         // Terminate the current reception of segmented message.
-                        stack.removeMessage (isoMessage);
+                        transportMessagesMap.erase (iter);
                         break;
                 }
 
@@ -494,77 +462,78 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         return false;
                 }
 
-                // TODO Proper addressing should be used.
                 // incomingAddress Should be used (as a key)!
-                TransportMessage *isoMessage = stack.findMessage (frame.getId ());
+                auto iter = transportMessagesMap.find (*theirAddress);
 
-                if (isoMessage) {
+                if (iter != transportMessagesMap.cend ()) {
                         // As in 6.7.3 Table 18
-                        indication (*theirAddress, {}, Result::N_UNEXP_PDU);
+                        indication (*theirAddress, iter->second.data, Result::N_UNEXP_PDU);
                         // Terminate the current reception of segmented message.
-                        stack.removeMessage (isoMessage);
+                        transportMessagesMap.erase (iter);
                 }
 
                 int firstFrameLen = (AddressTraitsT::USING_EXTENDED) ? (5) : (6);
-                isoMessage = stack.addMessage (frame.getId () /*, multiFrameRemainingLen*/);
 
-                if (!isoMessage) {
+                if (transportMessagesMap.full ()) {
                         indication (*theirAddress, {}, Result::N_MESSAGE_NUM_MAX);
                         return false;
                 }
 
+                auto &isoMessage = transportMessagesMap[*theirAddress];
+
                 firstFrameIndication (*theirAddress, multiFrameRemainingLen);
 
-                isoMessage->currentSn = 1;
-                isoMessage->multiFrameRemainingLen = multiFrameRemainingLen - firstFrameLen;
-                isoMessage->timer.start (N_BS_TIMEOUT);
+                isoMessage.currentSn = 1;
+                isoMessage.multiFrameRemainingLen = multiFrameRemainingLen - firstFrameLen;
+                isoMessage.timer.start (N_BS_TIMEOUT);
                 uint8_t dataOffset = AddressTraitsT::N_PCI_OFSET + 2;
-                isoMessage->append (frame, dataOffset, firstFrameLen);
+                isoMessage.append (frame, dataOffset, firstFrameLen);
 
                 // Send Flow Control
                 if (!sendFlowFrame (outgoingAddress, FlowStatus::CONTINUE_TO_SEND)) {
                         indication (*theirAddress, {}, Result::N_ERROR);
                         // Terminate the current reception of segmented message.
-                        stack.removeMessage (isoMessage);
+                        transportMessagesMap.erase (transportMessagesMap.find (*theirAddress));
                 }
 
                 return true;
         } break;
 
         case IsoNPduType::CONSECUTIVE_FRAME: {
-                TransportMessage *isoMessage = stack.findMessage (frame.getId ());
+                auto iter = transportMessagesMap.find (*theirAddress);
 
-                if (!isoMessage) {
+                if (iter == transportMessagesMap.cend ()) {
                         // As in 6.7.3 Table 18 - ignore
                         return false;
                 }
 
-                isoMessage->timer.start (N_CR_TIMEOUT);
+                auto &transportMessage = iter->second;
+                transportMessage.timer.start (N_CR_TIMEOUT);
 
-                if (AddressTraitsT::getSerialNumber (frame) != isoMessage->currentSn) {
+                if (AddressTraitsT::getSerialNumber (frame) != transportMessage.currentSn) {
                         // 6.5.4.3 SN error handling
                         indication (*theirAddress, {}, Result::N_WRONG_SN);
                         return false;
                 }
 
-                ++(isoMessage->currentSn);
-                isoMessage->currentSn %= 16;
+                ++(transportMessage.currentSn);
+                transportMessage.currentSn %= 16;
                 int maxConsecutiveFrameLen = (AddressTraitsT::USING_EXTENDED) ? (6) : (7);
-                int consecutiveFrameLen = std::min (maxConsecutiveFrameLen, isoMessage->multiFrameRemainingLen);
-                isoMessage->multiFrameRemainingLen -= consecutiveFrameLen;
+                int consecutiveFrameLen = std::min (maxConsecutiveFrameLen, transportMessage.multiFrameRemainingLen);
+                transportMessage.multiFrameRemainingLen -= consecutiveFrameLen;
 #if 0                
                 fmt::print ("Bytes left : {}\n", isoMessage->multiFrameRemainingLen);
 #endif
 
                 uint8_t dataOffset = AddressTraitsT::N_PCI_OFSET + 1;
-                isoMessage->append (frame, dataOffset, consecutiveFrameLen);
+                transportMessage.append (frame, dataOffset, consecutiveFrameLen);
 
-                if (isoMessage->multiFrameRemainingLen) {
+                if (transportMessage.multiFrameRemainingLen) {
                         return true;
                 }
 
-                indication (*theirAddress, isoMessage->data, Result::N_OK);
-                stack.removeMessage (isoMessage);
+                indication (*theirAddress, transportMessage.data, Result::N_OK);
+                transportMessagesMap.erase (iter);
 
         } break;
 
@@ -588,16 +557,18 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 template <typename TraitsT> void TransportProtocol<TraitsT>::run ()
 {
         // Check for timeouts between CAN frames while receiving.
-        TransportMessage *ptr = stack.getFirst ();
+        for (auto i = transportMessagesMap.begin (); i != transportMessagesMap.end ();) {
+                auto &tpMsg = i->second;
 
-        while (ptr) {
-                if (ptr->timer.isExpired ()) {
+                if (tpMsg.timer.isExpired ()) {
                         // TODO errorHandler (Error::N_TIMEOUT);
-                        ptr = stack.removeMessage (ptr);
+                        auto j = i;
+                        ++i;
+                        transportMessagesMap.erase (j);
                         continue;
                 }
 
-                ptr = ptr->next;
+                ++i;
         }
 
         // Run state machine(s) if any to perform transmission.
@@ -606,22 +577,6 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::run ()
                 return;
         }
 }
-
-/*****************************************************************************/
-
-// template <typename TraitsT> void TransportProtocol<TraitsT>::setCanExtAddr (uint8_t u)
-// {
-//         canExtAddrActive = true;
-//         canExtAddr = u;
-// }
-
-/*****************************************************************************/
-
-// template <typename TraitsT> uint32_t TransportProtocol<TraitsT>::getID (bool extended) const
-// {
-//         // ISO 15765-4:2005 chapter 6.3.2.2 & 6.3.2.3
-//         return (extended) ? (0x18db33f1) : (0x7df);
-// }
 
 /*****************************************************************************/
 
@@ -645,93 +600,6 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendFlowFrame (Addr
         }
 
         return true;
-}
-
-/*****************************************************************************/
-
-template <typename TraitsT>
-typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT>::TransportMessageList::findMessage (uint32_t address)
-{
-        TransportMessage *ptr = first;
-
-        while (ptr) {
-                if (ptr->address == address) {
-                        return ptr;
-                }
-
-                ptr = ptr->next;
-        }
-
-        return nullptr;
-}
-
-/*****************************************************************************/
-
-template <typename TraitsT>
-typename TransportProtocol<TraitsT>::TransportMessage *
-TransportProtocol<TraitsT>::TransportMessageList::addMessage (uint32_t address /*,size_t bufferSize*/)
-{
-        if (size++ >= MAX_MESSAGE_NUM) {
-                return nullptr;
-        }
-
-        TransportMessage *m = new TransportMessage ();
-        m->address = address;
-        //        m->data.reserve (bufferSize);
-        //        m->data.clear ();
-
-        TransportMessage **ptr = &first;
-        TransportMessage *last = nullptr;
-        while (*ptr) {
-                last = *ptr;
-                ptr = &(*ptr)->next;
-        }
-
-        m->prev = last;
-        *ptr = m;
-        return m;
-}
-
-/*****************************************************************************/
-
-template <typename TraitsT>
-typename TransportProtocol<TraitsT>::TransportMessage *TransportProtocol<TraitsT>::TransportMessageList::removeMessage (TransportMessage *m)
-{
-        if (!m) {
-                return nullptr;
-        }
-
-        TransportMessage *afterM = m->next;
-
-        if (!first || size == 0) {
-                // Critical error. Hang.
-                // errorHandler (Error::CRITICAL_ALGORITHM);
-                return nullptr;
-        }
-
-        if (!m->prev) {
-                first = m->next;
-
-                if (first) {
-                        first->prev = nullptr;
-                }
-        }
-        else {
-                m->prev->next = m->next;
-        }
-
-        if (!m->next) {
-                if (m->prev) {
-                        m->prev->next = nullptr;
-                }
-        }
-        else {
-                m->next->prev = m->prev;
-        }
-
-        --size;
-        delete m;
-        return afterM;
 }
 
 /*****************************************************************************/

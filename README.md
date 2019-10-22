@@ -1,6 +1,16 @@
 # TODO
 Write a tutorial.
 
+# Using
+## Dependencies
+Run-time dependencies (libraries bundled with the code in deps directory as git submodules)
+* [etl](https://www.etlcpp.com/map.html) - etl_profile.h is required to be available somewhere in your include path. You can copy one from ```test/example``` for starters.
+* [GSL](https://github.com/microsoft/GSL)
+
+Unit tests
+* fmt
+
+
 # Addressing
 Addressing is somewhat vaguely described in the 2004 ISO document I have, so the best idea I had (after long gead scratching) was to mimic the python-can-isotp library which I test my library against. In this API an address has a total of 5 numeric values representing various addresses, and another two types (target address type N_TAtype and the Mtype which stands for **TODO I forgot**). These numeric properties of an address object are:
 * rxId

@@ -103,6 +103,12 @@ private:
         TargetAddressType targetAddressType{TargetAddressType::PHYSICAL};
 }; // namespace tp
 
+inline bool operator< (Address const &a, Address const &b)
+{
+        return a.getTxId () < b.getTxId () && a.getTargetAddress () < b.getTargetAddress ()
+                && a.getNetworkAddressExtension () < b.getNetworkAddressExtension ();
+}
+
 /****************************************************************************/
 
 struct Normal11AddressEncoder {

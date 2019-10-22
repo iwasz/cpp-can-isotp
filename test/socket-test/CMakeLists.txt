@@ -3,6 +3,7 @@ SET (CMAKE_VERBOSE_MAKEFILE OFF)
 
 SET (CMAKE_BUILD_TYPE Debug)
 SET(CMAKE_CXX_FLAGS "-std=c++17 -Wall" CACHE INTERNAL "cxx compiler flags")
+include_directories("./")
 
 ADD_EXECUTABLE(socket-test
     "../../src/TransportProtocol.h"
