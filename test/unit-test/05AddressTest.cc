@@ -45,7 +45,7 @@ TEST_CASE ("Normal11 decode", "[address]")
                 cfw.setExtended (false);
                 auto a = Normal11AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->txId == 0x12);
+                REQUIRE (a->getTxId () == 0x12);
         }
 
         {
@@ -55,7 +55,7 @@ TEST_CASE ("Normal11 decode", "[address]")
                 cfw.setExtended (false);
                 auto a = Normal11AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->txId == 0x7ff);
+                REQUIRE (a->getTxId () == 0x7ff);
         }
 
         {
@@ -111,7 +111,7 @@ TEST_CASE ("Normal29 decode", "[address]")
                 cfw.setExtended (true);
                 auto a = Normal29AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->txId == 0x12);
+                REQUIRE (a->getTxId () == 0x12);
         }
 
         {
@@ -121,7 +121,7 @@ TEST_CASE ("Normal29 decode", "[address]")
                 cfw.setExtended (true);
                 auto a = Normal29AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->txId == 0x1FFFFFFF);
+                REQUIRE (a->getTxId () == 0x1FFFFFFF);
         }
 
         {
@@ -175,9 +175,9 @@ TEST_CASE ("NormalFixed29 decode", "[address]")
                 cfw.setExtended (true);
                 auto a = NormalFixed29AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->sourceAddress == 0x12);
-                REQUIRE (a->targetAddress == 0x34);
-                REQUIRE (a->targetAddressType == Address::TargetAddressType::PHYSICAL);
+                REQUIRE (a->getSourceAddress () == 0x12);
+                REQUIRE (a->getTargetAddress () == 0x34);
+                REQUIRE (a->getTargetAddressType () == Address::TargetAddressType::PHYSICAL);
         }
 
         {
@@ -187,9 +187,9 @@ TEST_CASE ("NormalFixed29 decode", "[address]")
                 cfw.setExtended (true);
                 auto a = NormalFixed29AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->sourceAddress == 0x12);
-                REQUIRE (a->targetAddress == 0x34);
-                REQUIRE (a->targetAddressType == Address::TargetAddressType::FUNCTIONAL);
+                REQUIRE (a->getSourceAddress () == 0x12);
+                REQUIRE (a->getTargetAddress () == 0x34);
+                REQUIRE (a->getTargetAddressType () == Address::TargetAddressType::FUNCTIONAL);
         }
 
         {
@@ -199,9 +199,9 @@ TEST_CASE ("NormalFixed29 decode", "[address]")
                 cfw.setExtended (true);
                 auto a = NormalFixed29AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->sourceAddress == 0xfe);
-                REQUIRE (a->targetAddress == 0xff);
-                REQUIRE (a->targetAddressType == Address::TargetAddressType::PHYSICAL);
+                REQUIRE (a->getSourceAddress () == 0xfe);
+                REQUIRE (a->getTargetAddress () == 0xff);
+                REQUIRE (a->getTargetAddressType () == Address::TargetAddressType::PHYSICAL);
         }
 
         {
@@ -268,9 +268,9 @@ TEST_CASE ("Extended11bits decode", "[address]")
                 cfw.set (0, 0xaa);
                 auto a = Extended11AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->txId == 0x456);
-                REQUIRE (a->targetAddress == 0xaa);
-                REQUIRE (a->targetAddressType == Address::TargetAddressType::PHYSICAL);
+                REQUIRE (a->getTxId () == 0x456);
+                REQUIRE (a->getTargetAddress () == 0xaa);
+                REQUIRE (a->getTargetAddressType () == Address::TargetAddressType::PHYSICAL);
         }
 
         {
@@ -337,8 +337,8 @@ TEST_CASE ("Extended29bits decode", "[address]")
                 cfw.set (0, 0xaa);
                 auto a = Extended29AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->txId == 0x789abc);
-                REQUIRE (a->targetAddress == 0xaa);
+                REQUIRE (a->getTxId () == 0x789abc);
+                REQUIRE (a->getTargetAddress () == 0xaa);
         }
 
         {
@@ -405,9 +405,9 @@ TEST_CASE ("Mixed11bits decode", "[address]")
                 cfw.set (0, 0xaa);
                 auto a = Mixed11AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->txId == 0x456);
-                REQUIRE (a->networkAddressExtension == 0xaa);
-                REQUIRE (a->targetAddressType == Address::TargetAddressType::PHYSICAL);
+                REQUIRE (a->getTxId () == 0x456);
+                REQUIRE (a->getNetworkAddressExtension () == 0xaa);
+                REQUIRE (a->getTargetAddressType () == Address::TargetAddressType::PHYSICAL);
         }
 
         {
@@ -483,11 +483,11 @@ TEST_CASE ("Mixed29bits decode", "[address]")
                 cfw.set (0, 0x77);
                 auto a = Mixed29AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->sourceAddress == 0x55);
-                REQUIRE (a->targetAddress == 0xaa);
-                REQUIRE (a->networkAddressExtension == 0x77);
-                REQUIRE (a->messageType == tp::Address::MessageType::REMOTE_DIAGNOSTICS);
-                REQUIRE (a->targetAddressType == tp::Address::TargetAddressType::PHYSICAL);
+                REQUIRE (a->getSourceAddress () == 0x55);
+                REQUIRE (a->getTargetAddress () == 0xaa);
+                REQUIRE (a->getNetworkAddressExtension () == 0x77);
+                REQUIRE (a->getMessageType () == tp::Address::MessageType::REMOTE_DIAGNOSTICS);
+                REQUIRE (a->getTargetAddressType () == tp::Address::TargetAddressType::PHYSICAL);
         }
 
         {
@@ -499,11 +499,11 @@ TEST_CASE ("Mixed29bits decode", "[address]")
                 cfw.set (0, 0x77);
                 auto a = Mixed29AddressEncoder::fromFrame (cfw);
                 REQUIRE (a);
-                REQUIRE (a->sourceAddress == 0x55);
-                REQUIRE (a->targetAddress == 0xaa);
-                REQUIRE (a->networkAddressExtension == 0x77);
-                REQUIRE (a->messageType == tp::Address::MessageType::REMOTE_DIAGNOSTICS);
-                REQUIRE (a->targetAddressType == tp::Address::TargetAddressType::FUNCTIONAL);
+                REQUIRE (a->getSourceAddress () == 0x55);
+                REQUIRE (a->getTargetAddress () == 0xaa);
+                REQUIRE (a->getNetworkAddressExtension () == 0x77);
+                REQUIRE (a->getMessageType () == tp::Address::MessageType::REMOTE_DIAGNOSTICS);
+                REQUIRE (a->getTargetAddressType () == tp::Address::TargetAddressType::FUNCTIONAL);
         }
 
         {

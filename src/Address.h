@@ -26,9 +26,6 @@ static constexpr uint32_t MAX_29_ID = 0x1FFFFFFF;
  */
 struct Address {
 
-        // enum class Type : uint8_t { NORMAL_11, NORMAL_29, FIXED_29, EXTENDED_11, EXTENDED_29, MIXED_11, MIXED_29 };
-
-        /// 5.3.1 Mtype
         enum class MessageType : uint8_t {
                 DIAGNOSTICS,       /// N_SA, N_TA, N_TAtype are used
                 REMOTE_DIAGNOSTICS /// N_SA, N_TA, N_TAtype and N_AE are used
@@ -65,6 +62,28 @@ struct Address {
         {
         }
 
+        uint32_t getRxId () const { return this->rxId; }
+        void setRxId (uint32_t rxId) { this->rxId = rxId; }
+
+        uint32_t getTxId () const { return this->txId; }
+        void setTxId (uint32_t txId) { this->txId = txId; }
+
+        uint8_t getSourceAddress () const { return this->sourceAddress; }
+        void setSourceAddress (uint8_t sourceAddress) { this->sourceAddress = sourceAddress; }
+
+        uint8_t getTargetAddress () const { return this->targetAddress; }
+        void setTargetAddress (uint8_t targetAddress) { this->targetAddress = targetAddress; }
+
+        uint8_t getNetworkAddressExtension () const { return this->networkAddressExtension; }
+        void setNetworkAddressExtension (uint8_t networkAddressExtension) { this->networkAddressExtension = networkAddressExtension; }
+
+        MessageType getMessageType () const { return this->messageType; }
+        void setMessageType (MessageType messageType) { this->messageType = messageType; }
+
+        TargetAddressType getTargetAddressType () const { return this->targetAddressType; }
+        void setTargetAddressType (TargetAddressType targetAddressType) { this->targetAddressType = targetAddressType; }
+
+private:
         uint32_t rxId{};
         uint32_t txId{};
 
@@ -82,7 +101,7 @@ struct Address {
 
         /// 5.3.2.4
         TargetAddressType targetAddressType{TargetAddressType::PHYSICAL};
-};
+}; // namespace tp
 
 /****************************************************************************/
 
@@ -108,17 +127,17 @@ struct Normal11AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                if (a.txId > MAX_11_ID) {
+                if (a.getTxId () > MAX_11_ID) {
                         return false;
                 }
 
-                f.setId (a.txId);
+                f.setId (a.getTxId ());
                 f.setExtended (false);
                 return true;
         }
 
         /// Implements address matching for this type of addressing.
-        static bool matches (Address const &theirs, Address const &ours) { return theirs.txId == ours.rxId; }
+        static bool matches (Address const &theirs, Address const &ours) { return theirs.getTxId () == ours.getRxId (); }
 };
 
 /****************************************************************************/
@@ -144,17 +163,17 @@ struct Normal29AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                if (a.txId > MAX_29_ID) {
+                if (a.getTxId () > MAX_29_ID) {
                         return false;
                 }
 
-                f.setId (a.txId);
+                f.setId (a.getTxId ());
                 f.setExtended (true);
                 return true;
         }
 
         /// Implements address matching for this type of addressing.
-        static bool matches (Address const &theirs, Address const &ours) { return theirs.txId == ours.rxId; }
+        static bool matches (Address const &theirs, Address const &ours) { return theirs.getTxId () == ours.getRxId (); }
 };
 
 /****************************************************************************/
@@ -190,8 +209,8 @@ struct NormalFixed29AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                f.setId (NORMAL_FIXED_29 | ((a.targetAddressType == Address::TargetAddressType::FUNCTIONAL) ? (N_TATYPE_MASK) : (0))
-                         | a.targetAddress << 8 | a.sourceAddress);
+                f.setId (NORMAL_FIXED_29 | ((a.getTargetAddressType () == Address::TargetAddressType::FUNCTIONAL) ? (N_TATYPE_MASK) : (0))
+                         | a.getTargetAddress () << 8 | a.getSourceAddress ());
 
                 f.setExtended (true);
 
@@ -199,7 +218,7 @@ struct NormalFixed29AddressEncoder {
         }
 
         /// Implements address matching for this type of addressing.
-        static bool matches (Address const &theirs, Address const &ours) { return theirs.targetAddress == ours.sourceAddress; }
+        static bool matches (Address const &theirs, Address const &ours) { return theirs.getTargetAddress () == ours.getSourceAddress (); }
 };
 
 /****************************************************************************/
@@ -225,25 +244,25 @@ struct Extended11AddressEncoder {
 
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                if (a.txId > MAX_11_ID) {
+                if (a.getTxId () > MAX_11_ID) {
                         return false;
                 }
 
-                f.setId (a.txId);
+                f.setId (a.getTxId ());
                 f.setExtended (false);
 
                 if (f.getDlc () < 1) {
                         f.setDlc (1);
                 }
 
-                f.set (0, a.targetAddress);
+                f.set (0, a.getTargetAddress ());
                 return true;
         }
 
         /// Implements address matching for this type of addressing.
         static bool matches (Address const &theirs, Address const &ours)
         {
-                return theirs.txId == ours.rxId && theirs.targetAddress == ours.sourceAddress;
+                return theirs.getTxId () == ours.getRxId () && theirs.getTargetAddress () == ours.getSourceAddress ();
         }
 };
 
@@ -270,25 +289,25 @@ struct Extended29AddressEncoder {
 
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                if (a.txId > MAX_29_ID) {
+                if (a.getTxId () > MAX_29_ID) {
                         return false;
                 }
 
-                f.setId (a.txId);
+                f.setId (a.getTxId ());
                 f.setExtended (true);
 
                 if (f.getDlc () < 1) {
                         f.setDlc (1);
                 }
 
-                f.set (0, a.targetAddress);
+                f.set (0, a.getTargetAddress ());
                 return true;
         }
 
         /// Implements address matching for this type of addressing.
         static bool matches (Address const &theirs, Address const &ours)
         {
-                return theirs.txId == ours.rxId && theirs.targetAddress == ours.sourceAddress;
+                return theirs.getTxId () == ours.getRxId () && theirs.getTargetAddress () == ours.getSourceAddress ();
         }
 };
 
@@ -317,17 +336,17 @@ struct Mixed11AddressEncoder {
                 // if (a.messageType != Address::MessageType::REMOTE_DIAGNOSTICS) {
                 //         return false;
                 // }
-                if (a.txId > MAX_11_ID) {
+                if (a.getTxId () > MAX_11_ID) {
                         return false;
                 }
 
-                f.setId (a.txId);
+                f.setId (a.getTxId ());
 
                 if (f.getDlc () < 1) {
                         f.setDlc (1);
                 }
 
-                f.set (0, a.networkAddressExtension);
+                f.set (0, a.getNetworkAddressExtension ());
                 f.setExtended (false);
                 return true;
         }
@@ -335,7 +354,7 @@ struct Mixed11AddressEncoder {
         /// Implements address matching for this type of addressing.
         static bool matches (Address const &theirs, Address const &ours)
         {
-                return theirs.txId == ours.rxId && theirs.networkAddressExtension == ours.networkAddressExtension;
+                return theirs.getTxId () == ours.getRxId () && theirs.getNetworkAddressExtension () == ours.getNetworkAddressExtension ();
         }
 };
 
@@ -383,14 +402,14 @@ struct Mixed29AddressEncoder {
                 //         return false;
                 // }
 
-                f.setId (((a.targetAddressType == Address::TargetAddressType::PHYSICAL) ? (PHYS_29) : (FUNC_29)) | a.targetAddress << 8
-                         | a.sourceAddress);
+                f.setId (((a.getTargetAddressType () == Address::TargetAddressType::PHYSICAL) ? (PHYS_29) : (FUNC_29))
+                         | a.getTargetAddress () << 8 | a.getSourceAddress ());
 
                 if (f.getDlc () < 1) {
                         f.setDlc (1);
                 }
 
-                f.set (0, a.networkAddressExtension);
+                f.set (0, a.getNetworkAddressExtension ());
                 f.setExtended (true);
                 return true;
         }
@@ -398,7 +417,8 @@ struct Mixed29AddressEncoder {
         /// Implements address matching for this type of addressing.
         static bool matches (Address const &theirs, Address const &ours)
         {
-                return theirs.targetAddress == ours.sourceAddress && theirs.networkAddressExtension == ours.networkAddressExtension;
+                return theirs.getTargetAddress () == ours.getSourceAddress ()
+                        && theirs.getNetworkAddressExtension () == ours.getNetworkAddressExtension ();
         }
 };
 

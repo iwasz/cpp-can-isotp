@@ -63,7 +63,7 @@ void receivingAsyncCallback ()
  * a single CAN frame took les than 1000ms + 50%. He should return false in that case, true otherwise.
  *
  * TODO tests:
- * - Test instantiation and usage with other CanFrame type
+ * + Test instantiation and usage with other CanFrame type
  * - Test instantiation and usage with other IsoMessage type
  * - Test flow control.
  *
@@ -95,22 +95,22 @@ void receivingAsyncCallback ()
  *
  * + Timing
  *
- * - Addressing
- *  - Address information is included in every CAN frame whether FF, CF, FC or SF
- *  - normal (uses arbitration ID, no constraints on the value)
- *   - 11b
- *   - 29b
- *  - mormal fixed (uses arbitration ID, further requirements as to how to encode this address into the arbitration ID). 29b only
- *   - physical
- *   - functional
- *  - extended. Like normal, but first data byte contains targetAddress, which is absent in arbitration ID.
- *   - 11b
- *    - physical
- *    - functional
- *   - 29b
- *    - physical
- *    - functional
- *  - mixed
+ * + Addressing
+ *  + Address information is included in every CAN frame whether FF, CF, FC or SF
+ *  + normal (uses arbitration ID, no constraints on the value)
+ *   + 11b
+ *   + 29b
+ *  + mormal fixed (uses arbitration ID, further requirements as to how to encode this address into the arbitration ID). 29b only
+ *   + physical
+ *   + functional
+ *  + extended. Like normal, but first data byte contains targetAddress, which is absent in arbitration ID.
+ *   + 11b
+ *    + physical
+ *    + functional
+ *   + 29b
+ *    + physical
+ *    + functional
+ *  + mixed
  *
  *
  * - Unexpected N_PDU
