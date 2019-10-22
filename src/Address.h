@@ -161,7 +161,8 @@ struct Normal29AddressEncoder {
 
 struct NormalFixed29AddressEncoder {
 
-        static constexpr uint32_t NORMAL_FIXED_29_MASK = 0x018DA0000;
+        static constexpr uint32_t NORMAL_FIXED_29 = 0x018DA0000;
+        static constexpr uint32_t NORMAL_FIXED_29_MASK = 0x1FFE0000;
         static constexpr uint32_t N_TA_MASK = 0x00000ff00;
         static constexpr uint32_t N_TATYPE_MASK = 0x10000;
         static constexpr uint32_t N_SA_MASK = 0x0000000ff;
@@ -175,7 +176,7 @@ struct NormalFixed29AddressEncoder {
         {
                 auto fId = f.getId ();
 
-                if (!f.isExtended () || bool ((fId & NORMAL_FIXED_29_MASK) != NORMAL_FIXED_29_MASK)) {
+                if (!f.isExtended () || bool ((fId & NORMAL_FIXED_29_MASK) != NORMAL_FIXED_29)) {
                         return {};
                 }
 
@@ -189,7 +190,7 @@ struct NormalFixed29AddressEncoder {
          */
         template <typename CanFrameWrapper> static bool toFrame (Address const &a, CanFrameWrapper &f)
         {
-                f.setId (NORMAL_FIXED_29_MASK | ((a.targetAddressType == Address::TargetAddressType::FUNCTIONAL) ? (N_TATYPE_MASK) : (0))
+                f.setId (NORMAL_FIXED_29 | ((a.targetAddressType == Address::TargetAddressType::FUNCTIONAL) ? (N_TATYPE_MASK) : (0))
                          | a.targetAddress << 8 | a.sourceAddress);
 
                 f.setExtended (true);
@@ -342,8 +343,9 @@ struct Mixed11AddressEncoder {
 
 struct Mixed29AddressEncoder {
 
-        static constexpr uint32_t PHYS_29_MASK = 0x018Ce0000;
-        static constexpr uint32_t FUNC_29_MASK = 0x018Cd0000;
+        static constexpr uint32_t PHYS_29 = 0x018Ce0000;
+        static constexpr uint32_t FUNC_29 = 0x018Cd0000;
+        static constexpr uint32_t PHYS_FUNC_29_MASK = 0x1FFf0000;
         static constexpr uint32_t N_TA_MASK = 0x00000ff00;
         static constexpr uint32_t N_SA_MASK = 0x0000000ff;
 
@@ -359,12 +361,12 @@ struct Mixed29AddressEncoder {
                         return {};
                 }
 
-                if (bool ((fId & PHYS_29_MASK) == PHYS_29_MASK)) {
+                if (bool ((fId & PHYS_FUNC_29_MASK) == PHYS_29)) {
                         return Address (0x00, 0x00, fId & N_SA_MASK, (fId & N_TA_MASK) >> 8, f.get (0), Address::MessageType::REMOTE_DIAGNOSTICS,
                                         Address::TargetAddressType::PHYSICAL);
                 }
 
-                if (bool ((fId & FUNC_29_MASK) == FUNC_29_MASK)) {
+                if (bool ((fId & PHYS_FUNC_29_MASK) == FUNC_29)) {
                         return Address (0x00, 0x00, fId & N_SA_MASK, (fId & N_TA_MASK) >> 8, f.get (0), Address::MessageType::REMOTE_DIAGNOSTICS,
                                         Address::TargetAddressType::FUNCTIONAL);
                 }
@@ -381,7 +383,7 @@ struct Mixed29AddressEncoder {
                 //         return false;
                 // }
 
-                f.setId (((a.targetAddressType == Address::TargetAddressType::PHYSICAL) ? (PHYS_29_MASK) : (FUNC_29_MASK)) | a.targetAddress << 8
+                f.setId (((a.targetAddressType == Address::TargetAddressType::PHYSICAL) ? (PHYS_29) : (FUNC_29)) | a.targetAddress << 8
                          | a.sourceAddress);
 
                 if (f.getDlc () < 1) {

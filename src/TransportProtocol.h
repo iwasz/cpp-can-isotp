@@ -183,6 +183,23 @@ public:
         void setMyAddress (Address const &a) { myAddress = a; }
         Address const &getMyAddress () const { return myAddress; }
 
+        /**
+         * This value will be sent in first flow control flow frame, and it tells the peer
+         * how long to wait between sending consecutive frames. This is to offload the receiver.
+         * Paragraph 6.5.5.5 in the 2004 ISO document. Default value 0 means that everything
+         * has to be sent immediately.
+         */
+        void setSeparationTime (uint8_t s) { separationTime = s; }
+
+        /**
+         * This value will be sent in first flow control flow frame, and it tells the peer
+         * how many consecutive frames to send in one burst. Then the receiver (the peer
+         * who calls setBlockSize) has to send a flow frame ackgnowledging received frames and
+         * and thus allowing for next batch of consecutive frames. Default 0 means that the
+         * receiver wants all frames at once without any interruption. See 6.5.5.4.
+         */
+        void setBlockSize (uint8_t b) { blockSize = b; }
+
 private:
         static uint32_t now ()
         {
@@ -300,6 +317,7 @@ private:
                 {
                         myAddress = a;
                         message = std::move (m);
+                        state = State::IDLE;
                 }
 
                 Status run (CanFrameWrapperType const *frame = nullptr);
@@ -309,7 +327,7 @@ private:
                 CanOutputInterface &outputInterface;
                 Address myAddress{};
                 IsoMessage message{};
-                State state{State::IDLE};
+                State state{State::DONE};
                 size_t bytesSent{};
                 uint16_t blocksSent{};
                 uint8_t sequenceNumber{1};
@@ -334,30 +352,14 @@ private:
         bool sendMultipleFrames (const Address &a, IsoMessageT &&msg);
 
         TransportMessageList stack;
-        /// Tells if CAN frames are extended (29bit ID), or standard (11bit ID).
-        bool extendedFrame = false;
-        /// Tells if ISO 15765-2 extended addressing is used or not. Not do be confused with extended CAN frames.
-        bool canExtAddrActive = false;
-        uint8_t canExtAddr = 0;
-
+        uint8_t blockSize{};
+        uint8_t separationTime{};
         Callback callback;
         CanOutputInterface outputInterface;
         ErrorHandler errorHandler;
         StateMachine stateMachine;
         Address myAddress;
 };
-
-/*****************************************************************************/
-
-// template <typename CanFrameT = CanFrame, typename AddressResolverT = Normal29AddressEncoder, typename IsoMessageT = IsoMessage,
-//           size_t MAX_MESSAGE_SIZE = 4095, typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = ChronoTimeProvider,
-//           typename ExceptionHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
-// TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT, TimeProviderT,
-//                                           ExceptionHandlerT, CallbackT>>
-// create (CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {}, ExceptionHandlerT errorHandler = {})
-// {
-//         return {callback, outputInterface, timeProvider, errorHandler};
-// }
 
 /*****************************************************************************/
 
@@ -446,11 +448,6 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
         Address const &outgoingAddress = myAddress;
 
         // Check if the received frame is meant for us.
-        // if (!theirAddress || theirAddress->txId != myAddress.rxId) {
-        //         return false;
-        // }
-
-        // Check if the received frame is meant for us.
         if (!theirAddress || !AddressEncoderT::matches (*theirAddress, myAddress)) {
                 return false;
         }
@@ -498,7 +495,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 }
 
                 // TODO Proper addressing should be used.
-                // incomingAddress Should be used!
+                // incomingAddress Should be used (as a key)!
                 TransportMessage *isoMessage = stack.findMessage (frame.getId ());
 
                 if (isoMessage) {
@@ -638,8 +635,8 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendFlowFrame (Addr
         }
 
         fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 0, (uint8_t (IsoNPduType::FLOW_FRAME) << 4) | uint8_t (fs));
-        fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 1, 8); // BS
-        fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 2, 0); // Stmin
+        fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 1, blockSize);      // BS
+        fcCanFrame.set (AddressTraitsT::N_PCI_OFSET + 2, separationTime); // Stmin
         fcCanFrame.setDlc (3 + AddressTraitsT::N_PCI_OFSET);
 
         if (!outputInterface (fcCanFrame.value ())) {
@@ -753,6 +750,10 @@ int TransportProtocol<TraitsT>::TransportMessage::append (CanFrameWrapperType co
 
 template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run (CanFrameWrapperType const *frame)
 {
+        if (state == State::DONE) {
+                return Status::OK;
+        }
+
         if (state != State::IDLE && state != State::SEND_FIRST_FRAME && bsCrTimer.isExpired ()) {
                 if (state == State::RECEIVE_BS_FLOW_CONTROL_FRAME || state == State::RECEIVE_FIRST_FLOW_CONTROL_FRAME) {
                         // confirm (address, Result::N_TIMEOUT_BS);
@@ -776,7 +777,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 break;
 
         case State::SEND_FIRST_FRAME: {
-                // TODO addressing
+
                 CanFrameWrapperType canFrame (0x00, false, (int (IsoNPduType::FIRST_FRAME) << 4) | (isoMessageSize & 0xf00) >> 8,
                                               (isoMessageSize & 0x0ff));
 
@@ -816,8 +817,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 // Address as received in the CAN frame frame.
                 auto theirAddress = AddressEncoderT::fromFrame (*frame);
 
-                // TODO encapsulate
-                if (!theirAddress || theirAddress->txId != myAddress.rxId) {
+                if (!theirAddress || !AddressEncoderT::matches (*theirAddress, myAddress)) {
                         break;
                 }
 
@@ -869,7 +869,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 }
 
                 waitFrameNumber = 0;
-                separationTimer.start (0);
+                separationTimer.start (0); // Separation timer is started later with proper tomeout calculated here.
                 state = State::SEND_CONSECUTIVE_FRAME;
                 bsCrTimer.start (N_CR_TIMEOUT);
         } break;

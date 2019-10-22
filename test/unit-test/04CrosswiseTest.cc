@@ -236,7 +236,6 @@ TEST_CASE ("cross full-duplex 4095B", "[crosswise]")
 
         int called = 0;
 
-        // Target address is 0x12, source address is 0x89.
         auto tpR = create (
                 Address (0x12, 0x89),
                 [&called] (auto const &isoMessage) {
@@ -248,7 +247,6 @@ TEST_CASE ("cross full-duplex 4095B", "[crosswise]")
                         return true;
                 });
 
-        // Target address is 0x89, source address is 0x12.
         auto tpT = create (
                 Address (0x89, 0x12),
                 [&called] (auto const &isoMessage) {
@@ -264,7 +262,7 @@ TEST_CASE ("cross full-duplex 4095B", "[crosswise]")
         tpT.send (std::vector<uint8_t> (4095));
         tpR.send (std::vector<uint8_t> (4095));
 
-        while (tpT.isSending ()) {
+        while (tpT.isSending () || tpR.isSending ()) {
                 tpT.run ();
                 for (CanFrame &f : framesFromT) {
                         tpR.onCanNewFrame (f);
