@@ -33,19 +33,19 @@ void receivingAsyncCallback ()
  * - Przejechać walgrindem od czasu do czasu
  * - Optymalizacja, bo testy idą wolno!
  * - Test the above.
- * - It is possible to define a TP object without a defazult address and then use its send
+ * + It is possible to define a TP object without a defazult address and then use its send
  * method also without an address. This way you are sending a message into oblivion. Have
  * it sorted out.
  * - TODO get rid of all warinigs and c-tidy issues.
  * - Check if separationTime and blockSize received from a peer is taken into account during
  * sending (check both sides of communication BS is faulty for sure, no flow frame is sent other
  * than first one).
- * - blockSize is hardcoede to 8 for testiung purposes. Revert to 0.
+ * + blockSize is hardcoede to 8 for testiung purposes. Revert to 0.
  * TODO : If errors occur during multi frame message receiving, the isoMessage should be
  * removed (eventually, probably some timeouts are mentioned in the ISO). Now it is not
  * possible to receive second message if first has failed to be received entirely.
- * TODO Check if retyurn value from sendFrame is taken into account (checked).
- * TODO implement all types of addressing.
+ * TODO Check if retyurn value from sendFrame is taken into account .
+ * + implement all types of addressing.
  * TODO Use some beter means of unit testing. Test time dependent calls, maybe use some
  * clever unit testing library like trompeleoleil for mocking.
  * TODO test crosswise connected objects. They should be able to speak to each other.
@@ -61,6 +61,8 @@ void receivingAsyncCallback ()
  * + encapsulate more functionality into CanFrameWrapper. Like gettype, get length, getSerialnumber  etc.
  * TODO Include a note about N_As and NAr timeouts in the README.md. User shall check if sending
  * a single CAN frame took les than 1000ms + 50%. He should return false in that case, true otherwise.
+ * - address all TODOs in the code.
+ * - get rid of homeberew list, use etl.
  *
  * TODO tests:
  * + Test instantiation and usage with other CanFrame type
