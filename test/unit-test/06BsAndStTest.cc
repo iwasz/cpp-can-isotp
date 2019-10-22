@@ -98,9 +98,9 @@ TEST_CASE ("SeparationTime test", "[address]")
                         return true;
                 });
 
-        tpT.setSeparationTime (0x7f);
+        tpT.setSeparationTime (0x3);
         tpT.send (std::vector<uint8_t> (4095));
-        tpR.setSeparationTime (0x7f);
+        tpR.setSeparationTime (0x3);
         tpR.send (std::vector<uint8_t> (4095));
 
         while (tpT.isSending () || tpR.isSending ()) {
