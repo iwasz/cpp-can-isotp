@@ -1,5 +1,10 @@
 # What it is
-This library implements [ISO 15765-2](https://en.wikipedia.org/wiki/ISO_15765-2) transport layer known also as CAN bus ISO TP or simply *Transport Protocol*. It was developed with microcontrollers in mind, but was also tested on a Linux box (although on a Linux system there is a [better option](https://github.com/hartkopp/can-isotp)).
+This library implements [ISO 15765-2](https://en.wikipedia.org/wiki/ISO_15765-2) transport layer known also as CAN bus ISO TP or simply *Transport Protocol*. It was developed with microcontrollers in mind, but was also tested on a Linux box (although on a Linux system there is a [better option](https://github.com/hartkopp/can-isotp)). 
+
+## Notes
+Whenever I refer to some cryptic paragraph numer in this document or in the source code I have **ISO 15765-2 First edition (2004-10-15)** on mind. This PDF id widely available in the Net though I'm not sure about lagality of this stuff, so I'm not including it in the repo. Normally an ISO document like that costs around $150.
+
+This library is influenced by and was tested against [python-can-isotp](https://github.com/pylessard/python-can-isotp).
 
 # Using the library
 ## Building
@@ -15,7 +20,7 @@ ninja
 # Run the tests
 test/unit-test/unit-test
 ```
-In case of trouble with updating submodules, refer to [this stack overflow question](https://stackoverflow.com/questions/1030169/easy-way-to-pull-latest-of-all-git-submodules) like I do everytime I deal with this stuff.
+In case of trouble with updating submodules, refer to [this stack overflow question](https://stackoverflow.com/questions/1030169/easy-way-to-pull-latest-of-all-git-submodules) (like I do everytime I deal with this stuff :D).
 
 ## Dependencies
 All dependencies are provided as git submodules:
@@ -61,13 +66,15 @@ auto tp = create<can_frame> ( // (2)
 
 listenSocket (socketFd, [&tp] (auto const &frame) { tp.onCanNewFrame (frame); }); // (6)
 ```
-The code you see above is more or less all that's needed for **receiving** ISO-TP messages. In (1) we somehow connect to the underlying CAN-bus subsystem and using ```socketFd``` we are able to send and receive raw CAN-frames (see examples). 
+The code you see above is more or less all that's needed for **receiving** ISO-TP messages. In (1) we somehow connect to the underlying CAN-bus subsystem and then, using ```socketFd``` we are able to send and receive raw CAN-frames (see examples). 
 
 ## Callbacks
 Callback is the second parameter to ```create``` function, and it can have 3 different forms. The simplest (called *simple* througout this document and the source code) is :
 
 ```cpp
 void indication (tp::IsoMessage const &msg) { /* ... */ }
+
+// Example usage:
 auto tp = tp::create<can_frame> (tp::Address{0x789ABC, 0x123456}, indication, socketSend);
 ```
 
@@ -95,6 +102,7 @@ public:
         void firstFrameIndication (tp::Address const &address, uint16_t len) {}
 };
 
+// Example usage:
 auto tp = tp::create<can_frame> (tp::Address{0x789ABC, 0x123456}, FullCallback (), socketSend);
 ```
 
