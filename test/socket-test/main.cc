@@ -7,6 +7,7 @@
  ****************************************************************************/
 
 #include "Address.h"
+#include "CanFrame.h"
 #include "LinuxCanFrame.h"
 #include "TransportProtocol.h"
 #include <algorithm>
@@ -162,4 +163,42 @@ int main ()
                 // fmt::print ("Received frame Id : {:x}, dlc : {}, data[0] = {}\n", frame.can_id, frame.can_dlc, frame.data[0]);
                 tp.onCanNewFrame (frame);
         });
+}
+
+void receive ()
+{
+        using namespace tp;
+        int socketFd = createSocket ();
+
+        auto tp = create<can_frame> (
+                Address{0x789ABC, 0x123456}, [] (auto const &iso) { fmt::print ("Message size : {}\n", iso.size ()); },
+                [socketFd] (auto const &frame) {
+                        if (!sendSocket (socketFd, frame)) {
+                                fmt::print ("Error\n");
+                                return false;
+                        }
+
+                        return true;
+                });
+
+        listenSocket (socketFd, [&tp] (auto const &frame) { tp.onCanNewFrame (frame); });
+}
+
+class FullCallback {
+public:
+        void indication (tp::Address const &address, std::vector<uint8_t> const &isoMessage, tp::Result result) {}
+        void confirm (tp::Address const &address, tp::Result result) {}
+        void firstFrameIndication (tp::Address const &address, uint16_t len) {}
+};
+
+bool socketSend (can_frame const &frame) { return true; }
+
+void receive2 ()
+{
+        // using namespace tp;
+        int socketFd = createSocket ();
+
+        auto tp = tp::create<can_frame> (tp::Address{0x789ABC, 0x123456}, FullCallback (), socketSend);
+
+        listenSocket (socketFd, [&tp] (auto const &frame) { tp.onCanNewFrame (frame); });
 }

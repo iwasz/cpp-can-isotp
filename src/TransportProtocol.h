@@ -452,7 +452,6 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
 
         // Send using multiple frames, state machine, and timing controll and whatnot.
         return sendMultipleFrames (a, std::move (msg));
-        return true;
 }
 
 /*****************************************************************************/
@@ -487,6 +486,10 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (co
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendMultipleFrames (const Address &a, IsoMessageT &&msg)
 {
+        if (stateMachine.getState () != StateMachine::State::DONE) {
+                return false;
+        }
+
         stateMachine.reset (a, std::move (msg));
         return true;
 }
@@ -518,7 +521,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 if (iter != transportMessagesMap.cend ()) { // found
                         // As in 6.7.3 Table 18
-                        indication (*theirAddress, iter->second.data, Result::N_UNEXP_PDU);
+                        indication (*theirAddress, {}, Result::N_UNEXP_PDU);
                         // Terminate the current reception of segmented message.
                         transportMessagesMap.erase (iter);
                         break;
@@ -548,7 +551,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 if (iter != transportMessagesMap.cend ()) {
                         // As in 6.7.3 Table 18
-                        indication (*theirAddress, iter->second.data, Result::N_UNEXP_PDU);
+                        indication (*theirAddress, {}, Result::N_UNEXP_PDU);
                         // Terminate the current reception of segmented message.
                         transportMessagesMap.erase (iter);
                 }
@@ -655,7 +658,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::run ()
                 auto &tpMsg = i->second;
 
                 if (tpMsg.timer.isExpired ()) {
-                        indication (i->first, i->second.data, i->second.timeoutReason);
+                        indication (i->first, {}, i->second.timeoutReason);
                         auto j = i;
                         ++i;
                         transportMessagesMap.erase (j);
@@ -889,4 +892,3 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 }
 
 } // namespace tp
-

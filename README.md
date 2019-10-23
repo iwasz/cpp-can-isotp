@@ -1,3 +1,6 @@
+# What it is
+This library implements [ISO 15765-2](https://en.wikipedia.org/wiki/ISO_15765-2) transport layer known also as CAN bus ISO TP or simply *Transport Protocol*. It was developed with microcontrollers in mind, but was also tested on a Linux box (although on a Linux system there is a [better option](https://github.com/hartkopp/can-isotp)).
+
 # Using the library
 ## Building
 This library is header only, but you can build unit-tests and other simple examples, which can help you understand how to use the library in case of some trouble. This is a possible scenario of acheiving this:
@@ -5,18 +8,14 @@ This library is header only, but you can build unit-tests and other simple examp
 ```sh
 git clone --recurse-submodules git@github.com:iwasz/cpp-can-isotp.git
 mkdir -p cpp-can-isotp/build
-cpp-can-isotp/build
+cd cpp-can-isotp/build
 cmake -GNinja ..
 ninja
+
+# Run the tests
+test/unit-test/unit-test
 ```
 In case of trouble with updating submodules, refer to [this stack overflow question](https://stackoverflow.com/questions/1030169/easy-way-to-pull-latest-of-all-git-submodules) like I do everytime I deal with this stuff.
-
-## Using in your project
-Just include "TransportProtocol.h"
-## Instantiating
-## Callbacks
-* 3 types of callbacks
-* Main callback can have 3 forms (called basic, advanced and advanced) method.
 
 ## Dependencies
 All dependencies are provided as git submodules:
@@ -27,8 +26,77 @@ Run-time dependencies (libraries bundled with the code in deps directory as git 
 * C++17 (```if constexpr```).
 
 Unit tests
-* fmt
+* [fmt](https://github.com/fmtlib/fmt)
 
+## Using in your project
+Just
+
+```cpp
+#include "TransportProtocol.h"
+```
+
+## Instantiating
+First you have to instantiate the ```TransportProtocol``` class which encapsulates the protocol state. TransportProtocol is a class template and can be customized depending on underlying CAN-bus implementation, memory constraints, error (exception) handling sheme and time related stuff. This makes the API of TransportProtocol a little bit verbose, but also enables one to use it on a *normal* computer (see ```socket-test``` for Linux example) as well as on microcontrollers which this library was meant for at the first place. 
+
+```cpp
+#include "LinuxCanFrame.h"
+#include "TransportProtocol.h"
+
+/// ...
+
+using namespace tp;
+int socketFd = createSocket (); // (1)
+
+auto tp = create<can_frame> ( // (2)
+         Address{0x789ABC, 0x123456}, // (3)
+         [] (auto const &iso) { fmt::print ("Message size : {}\n", iso.size ()); }, // (4)
+         [socketFd] (auto const &frame) { 
+               if (!sendSocket (socketFd, frame)) { // (5)
+                        fmt::print ("Error\n");
+                        return false;
+               }
+
+               return true;
+         });
+
+listenSocket (socketFd, [&tp] (auto const &frame) { tp.onCanNewFrame (frame); }); // (6)
+```
+The code you see above is more or less all that's needed for **receiving** ISO-TP messages. In (1) we somehow connect to the underlying CAN-bus subsystem and using ```socketFd``` we are able to send and receive raw CAN-frames (see examples). 
+
+## Callbacks
+Callback is the second parameter to ```create``` function, and it can have 3 different forms. The simplest (called *simple* througout this document and the source code) is :
+
+```cpp
+void indication (tp::IsoMessage const &msg) { /* ... */ }
+auto tp = tp::create<can_frame> (tp::Address{0x789ABC, 0x123456}, indication, socketSend);
+```
+
+This one implements ```N_USData.indication``` (see par. 5.2.4)  and gets called whan new ISO message was successfulty assembled, or in case of an error to inform the user, that current ISO message could not be assembled fully. In the latter case, the ```msg``` argument will be empty, but no other further information on the error will be available. Of course name ```indication``` is used here as an example, and even a lambda can be used (in fact in unit tests lambdas are used almost exclusively).
+
+The next one is called an *advanced* callback, because it has more parameters:
+
+```cpp
+void indication (tp::Address const &a, tp::IsoMessage const &msg, tp::Result res) { /* ... */ }
+```
+
+Meaning of the parameters is :
+
+1. Address ```a``` is the address of a peer who sent the message. Depending on the addressing scheme ```a.getTxId ()``` or ```a.getTargetAddress ()``` will be of interest to the user. See paragraph on addresses.
+1. Message ```msg``` is the ISO message (in case of a success) or empty if there was an error.
+1. Result ```res``` will have value ```Result::N_OK``` in case of a success or something other if case of a failed transmission.
+
+Lastly there is *advancedMethod* or *full* callback (again, those are the terms used in the unit tests and througout the comments in the source) which not only implements ```N_USData.indication``` but also ```N_USData.confirm``` and N_USData_FF.indication:
+
+```cpp
+class FullCallback {
+public:
+        void indication (tp::Address const &address, std::vector<uint8_t> const &isoMessage, tp::Result result) {}
+        void confirm (tp::Address const &address, tp::Result result) {}
+        void firstFrameIndication (tp::Address const &address, uint16_t len) {}
+};
+
+auto tp = tp::create<can_frame> (tp::Address{0x789ABC, 0x123456}, FullCallback (), socketSend);
+```
 
 # Addressing
 Addressing is somewhat vaguely described in the 2004 ISO document I have, so the best idea I had (after long head scratching) was to mimic the python-can-isotp library which I test my library against. In this API an address has a total of 5 numeric values representing various addresses, and another two types (target address type N_TAtype and the Mtype which stands for **TODO I forgot**). These numeric properties of an address object are:
@@ -122,3 +190,4 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 - [x] Get rid of dynamic allocation, because there is one.
 - [ ] Get rid of non English comments.
 - [ ] Finish this TODO
+- [ ] Calls like this : ```indication (*theirAddress, {}, Result::N_UNEXP_PDU);``` are potentially inefficient if IsoMessageT internally allocates on the stack (etl::vector for example). Possible solution would be to pass by pointer and pass nullptr in such cases, but that would be inconvenient for the end user.
