@@ -9,6 +9,11 @@
 #include "TransportProtocol.h"
 #include <iostream>
 
+std::ostream &operator<< (std::ostream &o, tp::IsoMessage const &b);
+std::ostream &operator<< (std::ostream &o, tp::CanFrame const &cf);
+
+/****************************************************************************/
+
 int main ()
 {
         auto tp = tp::create (
@@ -19,6 +24,47 @@ int main ()
                 },
                 tp::ChronoTimeProvider{}, [] (auto &&error) { std::cout << "Erorr : " << uint32_t (error) << std::endl; });
 
-        // Asynchronous - callback API
         tp.onCanNewFrame (tp::CanFrame (0x00, true, 1, 0x01, 0x67));
 }
+
+/****************************************************************************/
+
+std::ostream &operator<< (std::ostream &o, tp::IsoMessage const &b)
+{
+        o << "[";
+
+        for (auto i = b.cbegin (); i != b.cend ();) {
+
+                o << std::hex << int (*i);
+
+                if (++i != b.cend ()) {
+                        o << ",";
+                }
+        }
+
+        o << "]";
+        return o;
+}
+
+/*****************************************************************************/
+
+std::ostream &operator<< (std::ostream &o, tp::CanFrame const &cf)
+{
+        o << "CanFrame id = " << cf.id << ", dlc = " << int (cf.dlc) << ", ext = " << cf.extended << ", data = [";
+
+        for (int i = 0; i < cf.dlc;) {
+                o << int (gsl::at (cf.data, i));
+
+                if (++i != cf.dlc) {
+                        o << ",";
+                }
+                else {
+                        break;
+                }
+        }
+
+        o << "]";
+        return o;
+}
+
+/****************************************************************************/

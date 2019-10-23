@@ -3,13 +3,11 @@
 This library is header only, but you can build unit-tests and other simple examples, which can help you understand how to use the library in case of some trouble. This is a possible scenario of acheiving this:
 
 ```sh
-git clone git@github.com:iwasz/cpp-can-isotp.git
-cd cpp-can-isotp/deps
-git submodule update --init --recursive
-cd ..
-mkdir build
-cd build
-cmake ..
+git clone --recurse-submodules git@github.com:iwasz/cpp-can-isotp.git
+mkdir -p cpp-can-isotp/build
+cpp-can-isotp/build
+cmake -GNinja ..
+ninja
 ```
 In case of trouble with updating submodules, refer to [this stack overflow question](https://stackoverflow.com/questions/1030169/easy-way-to-pull-latest-of-all-git-submodules) like I do everytime I deal with this stuff.
 
