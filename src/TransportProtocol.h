@@ -15,8 +15,9 @@
 #include <etl/map.h>
 #include <functional>
 #include <gsl/gsl>
-#include <memory>
+// #include <memory>
 #include <optional>
+#include <vector>
 
 /**
  * Set maximum number of Flow Control frames with WAIT bit set that can be received
@@ -33,7 +34,7 @@ namespace tp {
  *
  */
 template <typename CanFrameT, typename IsoMessageT, size_t MAX_MESSAGE_SIZE_N, typename AddressResolverT, typename CanOutputInterfaceT,
-          typename TimeProviderT, typename ExceptionHandlerT, typename CallbackT, size_t MAX_INTERLEAVED_ISO_MESSAGES_N = 4>
+          typename TimeProviderT, typename ExceptionHandlerT, typename CallbackT, size_t MAX_INTERLEAVED_ISO_MESSAGES_N>
 struct TransportProtocolTraits {
         using CanFrame = CanFrameT;
         using IsoMessageTT = IsoMessageT;
@@ -192,7 +193,10 @@ public:
          */
         void setBlockSize (uint8_t b) { blockSize = b; }
 
+#ifndef UNIT_TEST
 private:
+#endif
+
         static uint32_t now ()
         {
                 static TimeProvider tp;
@@ -282,7 +286,7 @@ private:
                 StateMachine (StateMachine const &sm) noexcept = delete;
                 StateMachine &operator= (StateMachine const &sm) noexcept = delete;
 
-                void reset (Address const &a, IsoMessage &&m)
+                void reset (Address const &a, IsoMessageT &&m)
                 {
                         myAddress = a;
                         message = std::move (m);
@@ -295,7 +299,7 @@ private:
         private:
                 CanOutputInterface &outputInterface;
                 Address myAddress{};
-                IsoMessage message{};
+                IsoMessageT message{};
                 State state{State::DONE};
                 size_t bytesSent{};
                 uint16_t blocksSent{};
@@ -324,7 +328,10 @@ private:
         bool sendSingleFrame (const Address &a, IsoMessageT const &msg);
         bool sendMultipleFrames (const Address &a, IsoMessageT &&msg);
 
+#ifndef UNIT_TEST
 private:
+#endif
+
         etl::map<Address, TransportMessage, MAX_INTERLEAVED_ISO_MESSAGES> transportMessagesMap;
         uint8_t blockSize{};
         uint8_t separationTime{};
@@ -344,7 +351,7 @@ auto create (Address const &myAddress, CallbackT callback, CanOutputInterfaceT o
              ExceptionHandlerT errorHandler = {})
 {
         using TP = TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT,
-                                                             TimeProviderT, ExceptionHandlerT, CallbackT>>;
+                                                             TimeProviderT, ExceptionHandlerT, CallbackT, 4>>;
 
         return TP{myAddress, callback, outputInterface, timeProvider, errorHandler};
 }
@@ -630,7 +637,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 state = State::DONE;
         }
 
-        IsoMessage *message = &this->message;
+        IsoMessageT *message = &this->message;
 
         uint16_t isoMessageSize = message->size ();
 
@@ -792,41 +799,41 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
 /*****************************************************************************/
 
-inline std::ostream &operator<< (std::ostream &o, tp::IsoMessage const &b)
-{
-        o << "[";
+// inline std::ostream &operator<< (std::ostream &o, tp::IsoMessage const &b)
+// {
+//         o << "[";
 
-        for (auto i = b.cbegin (); i != b.cend ();) {
+//         for (auto i = b.cbegin (); i != b.cend ();) {
 
-                o << std::hex << int (*i);
+//                 o << std::hex << int (*i);
 
-                if (++i != b.cend ()) {
-                        o << ",";
-                }
-        }
+//                 if (++i != b.cend ()) {
+//                         o << ",";
+//                 }
+//         }
 
-        o << "]";
-        return o;
-}
+//         o << "]";
+//         return o;
+// }
 
-/*****************************************************************************/
+// /*****************************************************************************/
 
-inline std::ostream &operator<< (std::ostream &o, tp::CanFrame const &cf)
-{
-        // TODO data.
-        o << "CanFrame id = " << cf.id << ", dlc = " << int (cf.dlc) << ", ext = " << cf.extended << ", data = [";
+// inline std::ostream &operator<< (std::ostream &o, tp::CanFrame const &cf)
+// {
+//         // TODO data.
+//         o << "CanFrame id = " << cf.id << ", dlc = " << int (cf.dlc) << ", ext = " << cf.extended << ", data = [";
 
-        for (int i = 0; i < cf.dlc;) {
-                o << int (gsl::at (cf.data, i));
+//         for (int i = 0; i < cf.dlc;) {
+//                 o << int (gsl::at (cf.data, i));
 
-                if (++i != cf.dlc) {
-                        o << ",";
-                }
-                else {
-                        break;
-                }
-        }
+//                 if (++i != cf.dlc) {
+//                         o << ",";
+//                 }
+//                 else {
+//                         break;
+//                 }
+//         }
 
-        o << "]";
-        return o;
-}
+//         o << "]";
+//         return o;
+// }
