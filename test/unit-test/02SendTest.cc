@@ -8,6 +8,7 @@
 
 #include "TransportProtocol.h"
 #include "catch.hpp"
+#include <unistd.h>
 
 using namespace tp;
 
@@ -274,4 +275,20 @@ TEST_CASE ("tx 4096B", "[send]")
                 auto r = std::ref (v);
                 REQUIRE (tp.send (Address (0x67, 0x89), r) == false);
         }
+}
+
+// Not sure about this one
+TEST_CASE ("tx 1B timeout", "[send]")
+{
+        // bool called = false;
+        // auto tp = create (
+        //         {0, 0}, [] (auto const & /*unused*/) {},
+        //         [&called] (auto const &canFrame) {
+        //                 called = true;
+        //                 usleep (1600 * 1000); // 1.6s which is more than any timeout in the library
+        //                 return true;
+        //         });
+
+        // REQUIRE (!tp.send (Address (0x67, 0x89), {0x55}));
+        // REQUIRE (called);
 }

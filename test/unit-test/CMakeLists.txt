@@ -23,6 +23,7 @@ ADD_EXECUTABLE(unit-test
     "05AddressTest.cc"
     "06BsAndStTest.cc"
     "07IsoMessageTest.cc"
+    "08CallbackTest.cc"
 )
 
 ADD_TEST (unit-test unit-test)

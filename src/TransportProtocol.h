@@ -13,9 +13,7 @@
 #include <chrono>
 #include <cstdint>
 #include <etl/map.h>
-#include <functional>
 #include <gsl/gsl>
-// #include <memory>
 #include <optional>
 #include <vector>
 
@@ -105,7 +103,7 @@ public:
               outputInterface{outputInterface},
               //              timeProvider{ timeProvider },
               errorHandler{errorHandler},
-              stateMachine{this->outputInterface},
+              stateMachine{*this, this->outputInterface},
               myAddress (myAddress)
         {
         }
@@ -260,6 +258,7 @@ private:
                 int currentSn{};              /// Sequence number of Consecutive Frame.
                 int consecutiveFramesReceived{}; /// For comparison with block size.
                 Timer timer;                     /// For tracking time between first and consecutive frames with the same address.
+                Result timeoutReason{};          /// It fimer expired, what was the result.
         };
 
         /*
@@ -277,7 +276,7 @@ private:
                         DONE
                 };
 
-                explicit StateMachine (CanOutputInterface &o) : outputInterface (o) {}
+                explicit StateMachine (TransportProtocol &tp, CanOutputInterface &o) : tp (tp), outputInterface (o) {}
                 ~StateMachine () = default;
 
                 StateMachine (StateMachine &&sm) noexcept = delete;
@@ -297,6 +296,7 @@ private:
                 State getState () const { return state; }
 
         private:
+                TransportProtocol &tp;
                 CanOutputInterface &outputInterface;
                 Address myAddress{};
                 IsoMessageT message{};
@@ -304,8 +304,8 @@ private:
                 size_t bytesSent{};
                 uint16_t blocksSent{};
                 uint8_t sequenceNumber{1};
-                uint8_t blockSize{};
-                uint32_t separationTimeUs{};
+                uint8_t receivedBlockSize{};
+                uint32_t receivedSeparationTimeUs{};
                 Timer separationTimer{};
                 Timer bsCrTimer{};
                 uint8_t waitFrameNumber{};
@@ -317,9 +317,88 @@ private:
 
         /*---------------------------------------------------------------------------*/
 
-        void confirm (Address const &a, Result r) {}
-        void firstFrameIndication (Address const &a, uint16_t len) {}
-        void indication (Address const &a, IsoMessageT const &msg, Result r) { callback (msg); /*TODO tidy up this mess with callbacks*/ }
+        /// Checks if callback accepts single IsoMessage param thus has the form callback (IsoMessage msg)
+        template <typename T, typename = void> struct IsCallbackSimple : public std::false_type {
+        };
+
+        /// Checks if callback accepts single IsoMessage param thus has the form callback (IsoMessage msg)
+        template <typename T>
+        struct IsCallbackSimple<T, typename std::enable_if<true, decltype ((void)(std::declval<T &> () (IsoMessageT{})))>::type>
+            : public std::true_type {
+        };
+
+        /// Checks for a callback which have 3 params like this : Address{}, IsoMessageT{}, Result{}
+        template <typename T, typename = void> struct IsCallbackAdvanced : public std::false_type {
+        };
+
+        /// Checks for a callback which have 3 params like this : Address{}, IsoMessageT{}, Result{}
+        template <typename T>
+        struct IsCallbackAdvanced<
+                T, typename std::enable_if<true, decltype ((void)(std::declval<T &> () (Address{}, IsoMessageT{}, Result{})))>::type>
+            : public std::true_type {
+        };
+
+        template <typename T, typename = void> struct IsCallbackAdvancedMethod : public std::false_type {
+        };
+
+        template <typename T>
+        struct IsCallbackAdvancedMethod<
+                T, typename std::enable_if<true, decltype ((void)(std::declval<T &> ().indication (Address{}, IsoMessageT{}, Result{})))>::type>
+            : public std::true_type {
+        };
+
+        template <typename T, typename = void> struct HasCallbackConfirmMethod : public std::false_type {
+        };
+
+        template <typename T>
+        struct HasCallbackConfirmMethod<
+                T, typename std::enable_if<true, decltype ((void)(std::declval<T &> ().confirm (Address{}, Result{})))>::type>
+            : public std::true_type {
+        };
+
+        template <typename T, typename = void> struct HasCallbackFFIMethod : public std::false_type {
+        };
+
+        template <typename T>
+        struct HasCallbackFFIMethod<
+                T, typename std::enable_if<true, decltype ((void)(std::declval<T &> ().firstFrameIndication (Address{}, uint16_t{})))>::type>
+            : public std::true_type {
+        };
+
+        void confirm (Address const &a, Result r)
+        {
+                if constexpr (HasCallbackConfirmMethod<Callback>::value) {
+                        callback.confirm (a, r);
+                }
+        }
+
+        void firstFrameIndication (Address const &a, uint16_t len)
+        {
+                if constexpr (HasCallbackFFIMethod<Callback>::value) {
+                        callback.firstFrameIndication (a, len);
+                }
+        }
+
+        void indication (Address const &a, IsoMessageT const &msg, Result r)
+        {
+                constexpr bool simpleCallback = IsCallbackSimple<Callback>::value;
+                constexpr bool advancedCallback = IsCallbackAdvanced<Callback>::value;
+                constexpr bool advancedMethodCallback = IsCallbackAdvancedMethod<Callback>::value;
+
+                static_assert (simpleCallback || advancedCallback || advancedMethodCallback,
+                               "Wrong callback interface. Use either 'simple', 'advanced', or 'advancedMethod' callback. See the README.md for "
+                               "more info.");
+
+                if constexpr (simpleCallback) {
+                        callback (msg);
+                }
+                else if constexpr (advancedCallback) {
+                        callback (a, msg, r);
+                }
+                else if constexpr (advancedMethodCallback) {
+                        callback.indication (a, msg, r);
+                }
+        }
 
         /*---------------------------------------------------------------------------*/
 
@@ -392,7 +471,16 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (co
         }
 
         canFrame.setDlc (1 + msg.size ());
-        return outputInterface (canFrame.value ());
+        bool result = outputInterface (canFrame.value ());
+
+        if (!result) {
+                confirm (myAddress, Result::N_TIMEOUT_A);
+        }
+        else {
+                confirm (myAddress, Result::N_OK);
+        }
+
+        return result;
 }
 
 /*****************************************************************************/
@@ -479,6 +567,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                 isoMessage.currentSn = 1;
                 isoMessage.multiFrameRemainingLen = multiFrameRemainingLen - firstFrameLen;
                 isoMessage.timer.start (N_BS_TIMEOUT);
+                isoMessage.timeoutReason = Result::N_TIMEOUT_BS;
                 uint8_t dataOffset = AddressTraitsT::N_PCI_OFSET + 2;
                 isoMessage.append (frame, dataOffset, firstFrameLen);
 
@@ -502,6 +591,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 auto &transportMessage = iter->second;
                 transportMessage.timer.start (N_CR_TIMEOUT);
+                transportMessage.timeoutReason = Result::N_TIMEOUT_CR;
 
                 if (AddressTraitsT::getSerialNumber (frame) != transportMessage.currentSn) {
                         // 6.5.4.3 SN error handling
@@ -565,7 +655,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::run ()
                 auto &tpMsg = i->second;
 
                 if (tpMsg.timer.isExpired ()) {
-                        // TODO errorHandler (Error::N_TIMEOUT);
+                        indication (i->first, i->second.data, i->second.timeoutReason);
                         auto j = i;
                         ++i;
                         transportMessagesMap.erase (j);
@@ -577,7 +667,7 @@ template <typename TraitsT> void TransportProtocol<TraitsT>::run ()
 
         // Run state machine(s) if any to perform transmission.
         if (Status s = stateMachine.run (); s != Status::OK) {
-                errorHandler (s); // TODO not Status, but Error is the correct type
+                errorHandler (s);
                 return;
         }
 }
@@ -628,19 +718,17 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
         if (state != State::IDLE && state != State::SEND_FIRST_FRAME && bsCrTimer.isExpired ()) {
                 if (state == State::RECEIVE_BS_FLOW_CONTROL_FRAME || state == State::RECEIVE_FIRST_FLOW_CONTROL_FRAME) {
-                        // confirm (address, Result::N_TIMEOUT_BS);
+                        tp.confirm (myAddress, Result::N_TIMEOUT_BS);
                 }
                 else {
-                        // TODO confirm ()Result::N_TIMEOUT_Cr
+                        tp.confirm (myAddress, Result::N_TIMEOUT_CR);
                 }
 
                 state = State::DONE;
         }
 
         IsoMessageT *message = &this->message;
-
         uint16_t isoMessageSize = message->size ();
-
         using Traits = AddressTraits<AddressEncoderT>;
 
         switch (state) {
@@ -666,11 +754,12 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 canFrame.setDlc (2 + toSend);
 
                 if (!outputInterface (canFrame.value ())) {
-                        // confirm Result::N_TIMEOUT_A
+                        tp.confirm (myAddress, Result::N_TIMEOUT_A); // TODO is it correct Result::?
                         state = State::DONE;
                         break;
                 }
 
+                tp.confirm (myAddress, Result::N_OK);
                 state = State::RECEIVE_FIRST_FLOW_CONTROL_FRAME;
                 bytesSent += toSend;
                 bsCrTimer.start (N_BS_TIMEOUT);
@@ -702,23 +791,22 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 FlowStatus fs = Traits::getFlowStatus (*frame);
 
                 if (fs != FlowStatus::CONTINUE_TO_SEND && fs != FlowStatus::WAIT && fs != FlowStatus::OVERFLOW) {
-                        // TODO confirm (Address{}, Result::N_INVALID_FS); // 6.5.5.3
-                        state = State::DONE; // abort
+                        tp.confirm (*theirAddress, Result::N_INVALID_FS); // 6.5.5.3
+                        state = State::DONE;                              // abort
                 }
 
                 if (fs == FlowStatus::OVERFLOW) {
-                        // TODO confirm (Address{}, Result::N_BUFFER_OVFLW);
+                        tp.confirm (*theirAddress, Result::N_BUFFER_OVFLW);
                         state = State::DONE; // abort
                 }
 
                 if (fs == FlowStatus::WAIT) {
                         bsCrTimer.start (N_BS_TIMEOUT);
-                        // TODO bsTimer
                         ++waitFrameNumber;
 
                         if (waitFrameNumber >= MAX_WAIT_FRAME_NUMBER) { // In case of MAX_WAIT_FRAME_NUMBER == 0 message will be aborted
                                                                         // immediately, which is fine according to the ISO.
-                                // TODO confirm (Address{}, Result::N_WFT_OVRN);
+                                tp.confirm (*theirAddress, Result::N_WFT_OVRN);
                                 state = State::DONE; // abort
                         }
 
@@ -726,17 +814,17 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 }
 
                 if (state == State::RECEIVE_FIRST_FLOW_CONTROL_FRAME) {
-                        blockSize = frame->get (1);        // 6.5.5.4 page 21 // TODO change name to receivedBlockSize
-                        separationTimeUs = frame->get (2); // TODO change name to receivedSeparationTimeUs
+                        receivedBlockSize = frame->get (1); // 6.5.5.4 page 21
+                        receivedSeparationTimeUs = frame->get (2);
 
-                        if (separationTimeUs >= 0 && separationTimeUs <= 0x7f) {
-                                separationTimeUs *= 1000; // Convert to µs
+                        if (receivedSeparationTimeUs >= 0 && receivedSeparationTimeUs <= 0x7f) {
+                                receivedSeparationTimeUs *= 1000; // Convert to µs
                         }
-                        else if (separationTimeUs >= 0xf1 && separationTimeUs <= 0xf9) {
-                                separationTimeUs = (separationTimeUs - 0xf0) * 100;
+                        else if (receivedSeparationTimeUs >= 0xf1 && receivedSeparationTimeUs <= 0xf9) {
+                                receivedSeparationTimeUs = (receivedSeparationTimeUs - 0xf0) * 100;
                         }
                         else {
-                                separationTimeUs = 0x7f * 1000; // 6.5.5.6 ST error handling
+                                receivedSeparationTimeUs = 0x7f * 1000; // 6.5.5.6 ST error handling
                         }
                 }
 
@@ -766,8 +854,13 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 }
 
                 canFrame.setDlc (1 + toSend);
-                // TODO what if it fails (returns false).
-                outputInterface (canFrame.value ());
+
+                if (!outputInterface (canFrame.value ())) {
+                        tp.confirm (myAddress, Result::N_TIMEOUT_A);
+                        state = State::DONE;
+                        break;
+                }
+
                 bytesSent += toSend;
 
                 if (bytesSent >= message->size ()) {
@@ -775,14 +868,14 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                         break;
                 }
 
-                if (blockSize && ++blocksSent >= blockSize) {
+                if (receivedBlockSize && ++blocksSent >= receivedBlockSize) {
                         state = State::RECEIVE_BS_FLOW_CONTROL_FRAME;
                         bsCrTimer.start (N_BS_TIMEOUT);
                         break;
                 }
 
                 // TODO separationTimeUs should be in 100µs units. Now i have 1ms resolution, so f1-f9 STmin are rounded to 0
-                separationTimer.start (separationTimeUs / 1000);
+                separationTimer.start (receivedSeparationTimeUs / 1000);
                 bsCrTimer.start (N_CR_TIMEOUT);
                 break;
 
@@ -820,7 +913,6 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
 // inline std::ostream &operator<< (std::ostream &o, tp::CanFrame const &cf)
 // {
-//         // TODO data.
 //         o << "CanFrame id = " << cf.id << ", dlc = " << int (cf.dlc) << ", ext = " << cf.extended << ", data = [";
 
 //         for (int i = 0; i < cf.dlc;) {

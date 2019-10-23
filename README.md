@@ -1,18 +1,39 @@
-# TODO
-Write a tutorial.
+# Using the library
+## Building
+This library is header only, but you can build unit-tests and other simple examples, which can help you understand how to use the library in case of some trouble. This is a possible scenario of acheiving this:
 
-# Using
+```sh
+git clone git@github.com:iwasz/cpp-can-isotp.git
+cd cpp-can-isotp/deps
+git submodule update --init --recursive
+cd ..
+mkdir build
+cd build
+cmake ..
+```
+In case of trouble with updating submodules, refer to [this stack overflow question](https://stackoverflow.com/questions/1030169/easy-way-to-pull-latest-of-all-git-submodules) like I do everytime I deal with this stuff.
+
+## Using in your project
+Just include "TransportProtocol.h"
+## Instantiating
+## Callbacks
+* 3 types of callbacks
+* Main callback can have 3 forms (called basic, advanced and advanced) method.
+
 ## Dependencies
+All dependencies are provided as git submodules:
+
 Run-time dependencies (libraries bundled with the code in deps directory as git submodules)
 * [etl](https://www.etlcpp.com/map.html) - etl_profile.h is required to be available somewhere in your include path. You can copy one from ```test/example``` for starters.
 * [GSL](https://github.com/microsoft/GSL)
+* C++17 (```if constexpr```).
 
 Unit tests
 * fmt
 
 
 # Addressing
-Addressing is somewhat vaguely described in the 2004 ISO document I have, so the best idea I had (after long gead scratching) was to mimic the python-can-isotp library which I test my library against. In this API an address has a total of 5 numeric values representing various addresses, and another two types (target address type N_TAtype and the Mtype which stands for **TODO I forgot**). These numeric properties of an address object are:
+Addressing is somewhat vaguely described in the 2004 ISO document I have, so the best idea I had (after long head scratching) was to mimic the python-can-isotp library which I test my library against. In this API an address has a total of 5 numeric values representing various addresses, and another two types (target address type N_TAtype and the Mtype which stands for **TODO I forgot**). These numeric properties of an address object are:
 * rxId
 * txId
 * sourceAddress
@@ -41,11 +62,11 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 - [x] Check if separationTime and blockSize received from a peer is taken into account during sending (check both sides of communication BS is faulty for sure, no flow frame is sent other than first one).
 - [x] blockSize is hardcoede to 8 for testiung purposes. Revert to 0.
 - [ ] If errors occur during multi frame message receiving, the isoMessage should be removed (eventually. Probably some timeouts are mentioned in the ISO). Now it is not possible to receive second message if first has failed to be received entirely.
-- [ ] Check if retyurn value from sendFrame is taken into account .
+- [x] Check if retyurn value from sendFrame is taken into account .
 - [x] Implement all types of addressing.
-- [ ] Use some beter means of unit testing. Test time dependent calls, maybe use some clever unit testing library like trompeleoleil for mocking.
+- [ ] Use some better means of unit testing. Test time dependent calls, maybe use some clever unit testing library like trompeleoleil for mocking.
 - [x] Test crosswise connected objects. They should be able to speak to each other.
-- [ ] Test this library with python-can-isotp.
+- [x] Test this library with python-can-isotp.
 - [ ] Add blocking API.
 - [ ] Test this api with std::threads.
 - [x] Implement FF parameters : BS and STime
@@ -61,9 +82,9 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 - [x] Test flow control.
 - [ ] Communication services (page 3):
   - [x] N_USData.request (address, message)
-  - [ ] N_USData.confirm (address, result) <- request (this above an only this) completed successfully or not.
-  - [ ] N_USData_FF.indication (address, LENGTH) <- callback that first frame was received. It tells what is the lenghth of expected message
-  - [ ] N_USData.indication (address, Message, result) - after Sf or after multi-can-message. Indicates that new data has arrived.
+  - [x] N_USData.confirm (address, result) <- request (this above an only this) completed successfully or not.
+  - [X] N_USData_FF.indication (address, LENGTH) <- callback that first frame was received. It tells what is the lenghth of expected message
+  - [x] N_USData.indication (address, Message, result) - after Sf or after multi-can-message. Indicates that new data has arrived.
   - [x] N_ChangeParameter.request (faddress, key, value) - requests a parameter change in peer or locally, I'm not sure.
   - [x] N_ChangeParameter.confirm  (address, key, result).
   - [x] N_ChangeParameter.request and N_ChangeParameter.confirm are optional. Fixed values may be used instead, and this is the way to go I think. They are in fact hardcoded to 0 (best performance) in sendFlowFrame (see comment).
@@ -102,3 +123,4 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 -  [ ] test
 - [x] Get rid of dynamic allocation, because there is one.
 - [ ] Get rid of non English comments.
+- [ ] Finish this TODO
