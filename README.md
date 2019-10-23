@@ -32,12 +32,13 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 # TODOs, changes
 
 - [x] Handle ISO messages that are constrained to less than maximum 4095B allowed by the ISO document.
-- [ ] Test when ISO message is size-constrained.
+- [x] Test when ISO message is size-constrained.
+- [x] Test etl::vector ISO messages.
 - [x] Use valgrind in the unit-test binary from time to time.
 - [ ] Maybe optimize, but not so important.
-- [x] It is possible to define a TP object without a defazult address and then use its send method also without an address. This way you are sending a message into oblivion. Have it sorted out.
+- [x] It is possible to define a TP object without a default address and then use its send method also without an address. This way you are sending a message into oblivion. Have it sorted out.
 - [ ] Get rid of all warinigs and c-tidy issues.
-- [ ] Check if separationTime and blockSize received from a peer is taken into account during sending (check both sides of communication BS is faulty for sure, no flow frame is sent other than first one).
+- [x] Check if separationTime and blockSize received from a peer is taken into account during sending (check both sides of communication BS is faulty for sure, no flow frame is sent other than first one).
 - [x] blockSize is hardcoede to 8 for testiung purposes. Revert to 0.
 - [ ] If errors occur during multi frame message receiving, the isoMessage should be removed (eventually, probably some timeouts are mentioned in the ISO). Now it is not possible to receive second message if first has failed to be received entirely.
 - [ ] Check if retyurn value from sendFrame is taken into account .
