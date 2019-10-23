@@ -40,7 +40,7 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 - [ ] Get rid of all warinigs and c-tidy issues.
 - [x] Check if separationTime and blockSize received from a peer is taken into account during sending (check both sides of communication BS is faulty for sure, no flow frame is sent other than first one).
 - [x] blockSize is hardcoede to 8 for testiung purposes. Revert to 0.
-- [ ] If errors occur during multi frame message receiving, the isoMessage should be removed (eventually, probably some timeouts are mentioned in the ISO). Now it is not possible to receive second message if first has failed to be received entirely.
+- [ ] If errors occur during multi frame message receiving, the isoMessage should be removed (eventually. Probably some timeouts are mentioned in the ISO). Now it is not possible to receive second message if first has failed to be received entirely.
 - [ ] Check if retyurn value from sendFrame is taken into account .
 - [x] Implement all types of addressing.
 - [ ] Use some beter means of unit testing. Test time dependent calls, maybe use some clever unit testing library like trompeleoleil for mocking.
@@ -51,14 +51,14 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 - [x] Implement FF parameters : BS and STime
 - [x] verify with the ISO pdf whether everything is implemented, and what has to be implemented.
 - [ ] Redesign API - I (as a user) hate being forced to provide dozens of arguyments upon construction that I don't really care about and do not use them. In this particular case my biggest concern is the create function and callbacks that it takes.
-- [x] implement all enums that can be found in the ISO document.
-- [x] encapsulate more functionality into CanFrameWrapper. Like gettype, get length, getSerialnumber  etc.
-- [ ] Include a note about N_As and NAr timeouts in the README.md. User shall check if sending a single CAN frame took les than 1000ms + 50%. He should return false in that case, true otherwise.
-- [ ] address all TODOs in the code.
-- [x] get rid of homeberew list, use etl.
+- [x] Implement all enums that can be found in the ISO document.
+- [x] ~~Encapsulate more functionality into CanFrameWrapper. Like gettype, get length, getSerialnumber  etc.~~
+- [ ] (?) Include a note about N_As and NAr timeouts in the README.md. User shall check if sending a single CAN frame took les than 1000ms + 50%. He should return false in that case, true otherwise.
+- [ ] Address all TODOs in the code.
+- [x] Get rid of homeberew list, use etl.
 - [x] Test instantiation and usage with other CanFrame type
-- [ ] Test instantiation and usage with other IsoMessage type
-- [ ] Test flow control.
+- [x] Test instantiation and usage with other IsoMessage type
+- [x] Test flow control.
 - [ ] Communication services (page 3):
   - [x] N_USData.request (address, message)
   - [ ] N_USData.confirm (address, result) <- request (this above an only this) completed successfully or not.
@@ -70,7 +70,7 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 - [x] Parameters (fixed or changeable) are : STmin and BS. Both hardcoded to 0.
 - [x] 5.2.3 and 5.2.4 when to send an indication and ff indication.
 - [x] enum N_Result
-- [ ] Flow control during transmission (chapter 6.3 pages 12, 13, 14).
+- [X] Flow control during transmission (chapter 6.3 pages 12, 13, 14).
 - [x] Reading BS and STmin from FC frame received aftrer sending FF.
 - [x] Waiting for FC between blocks of size BS CAN frames.
 - [x] Reading this incoming FC and deciding what to do next.
@@ -93,8 +93,8 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
      - [x] 11b
      - [x] 29b
   -  [x] mixed
-     - [ ] 11
-     - [ ] 29
+     - [x] 11
+     - [x] 29
   - [x] physical
   - [x] functional
 - [ ] Unexpected N_PDU
