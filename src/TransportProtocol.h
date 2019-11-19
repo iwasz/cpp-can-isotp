@@ -9,10 +9,8 @@
 #pragma once
 #include "Address.h"
 #include "CanFrame.h"
+#include "CppCompat.h"
 #include "MiscTypes.h"
-#include <etl/map.h>
-#include <gsl/gsl>
-#include <optional>
 
 /**
  * Set maximum number of Flow Control frames with WAIT bit set that can be received

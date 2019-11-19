@@ -126,6 +126,11 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 
 # TODOs, changes
 
+- [ ] Add Stm32 example.
+- [ ] Move ```example``` from test to root, rename to ```examples```. Add Ardiono example with ino extension.
+- [ ] Extend Linux example, implement CAN interface properly using boost::asio.
+- [ ] Add Arduino example 
+- [ ] Add an introduction to TP addressing in this README.
 - [x] Handle ISO messages that are constrained to less than maximum 4095B allowed by the ISO document.
 - [x] Test when ISO message is size-constrained.
 - [x] Test etl::vector ISO messages.

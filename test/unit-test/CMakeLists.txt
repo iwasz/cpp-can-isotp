@@ -9,11 +9,16 @@ ENABLE_TESTING ()
 
 ADD_DEFINITIONS ("-DUNIT_TEST=1")
 ADD_EXECUTABLE(unit-test
-    "../../src/TransportProtocol.h"
-    "../../src/CanFrame.h"
     "../../src/Address.h"
+    "../../src/ArduinoTransportProtocol.h"
+    "../../src/CanFrame.h"
+    "../../src/CppCompat.h"
+    "../../src/LinuxCanFrame.h"
+    "../../src/LinuxTransportProtocol.h"
     "../../src/MiscTypes.h"
-    
+    "../../src/StlTypes.h"
+    "../../src/TransportProtocol.h"
+
     "etl_profile.h"
     "00CatchInit.cc"
     "01RecvTest.cc"
