@@ -10,12 +10,10 @@
 #include "Address.h"
 #include "CanFrame.h"
 #include "MiscTypes.h"
-#include <chrono>
 #include <cstdint>
 #include <etl/map.h>
 #include <gsl/gsl>
 #include <optional>
-#include <vector>
 
 /**
  * Set maximum number of Flow Control frames with WAIT bit set that can be received
@@ -54,6 +52,9 @@ static constexpr size_t N_A_TIMEOUT = 1500;
 static constexpr size_t N_BS_TIMEOUT = 1500;
 static constexpr size_t N_CR_TIMEOUT = 1500;
 
+/// Max allowed by the ISO standard.
+static constexpr int MAX_ALLOWED_ISO_MESSAGE_SIZE = 4095;
+
 /**
  * Implements ISO 15765-2 which is also called CAN ISO-TP or CAN ISO transport protocol.
  * Sources:
@@ -80,8 +81,6 @@ public:
         using AddressEncoderT = typename TraitsT::AddressEncoderT;
         using AddressTraitsT = AddressTraits<AddressEncoderT>;
 
-        /// Max allowed by the ISO standard.
-        static constexpr int MAX_ALLOWED_ISO_MESSAGE_SIZE = 4095;
         static constexpr size_t MAX_INTERLEAVED_ISO_MESSAGES = TraitsT::MAX_INTERLEAVED_ISO_MESSAGES;
 
         /// Max allowed by this implementation. Can be lowered if memory is scarce.
@@ -317,7 +316,7 @@ private:
 
         /*---------------------------------------------------------------------------*/
 
-        /// Checks if callback accepts single IsoMessage param thus has the form callback (IsoMessage msg)
+        /// Checks if callback accepts single IsoMessage param thus has the form callback (IsoMessage msg) TODO use std::is_invocable_v
         template <typename T, typename = void> struct IsCallbackSimple : public std::false_type {
         };
 
@@ -420,20 +419,6 @@ private:
         StateMachine stateMachine;
         Address myAddress;
 };
-
-/*****************************************************************************/
-
-template <typename CanFrameT = CanFrame, typename AddressResolverT = Normal29AddressEncoder, typename IsoMessageT = IsoMessage,
-          size_t MAX_MESSAGE_SIZE = 4095, typename CanOutputInterfaceT = LinuxCanOutputInterface, typename TimeProviderT = ChronoTimeProvider,
-          typename ExceptionHandlerT = InfiniteLoop, typename CallbackT = CoutPrinter>
-auto create (Address const &myAddress, CallbackT callback, CanOutputInterfaceT outputInterface = {}, TimeProviderT timeProvider = {},
-             ExceptionHandlerT errorHandler = {})
-{
-        using TP = TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT,
-                                                             TimeProviderT, ExceptionHandlerT, CallbackT, 4>>;
-
-        return TP{myAddress, callback, outputInterface, timeProvider, errorHandler};
-}
 
 /*****************************************************************************/
 

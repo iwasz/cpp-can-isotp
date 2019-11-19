@@ -6,10 +6,7 @@
  *  ~~~~~~~~~                                                               *
  ****************************************************************************/
 
-#include "Address.h"
-#include "CanFrame.h"
-#include "LinuxCanFrame.h"
-#include "TransportProtocol.h"
+#include "LinuxTransportProtocol.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>

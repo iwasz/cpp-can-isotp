@@ -65,4 +65,19 @@ public:
 private:
         can_frame frame{};
 };
+
+/**
+ * This interface assumes that sending single CAN frame is instant and we
+ * now the status (whether it failed or succeeded) instantly (thus boolean)
+ * return type.
+ *
+ * Important! If this interface fails, it shoud return false. Also, ISO requires,
+ * that sending a CAN message shoud take not more as 1000ms + 50% i.e. 1500ms. If
+ * this interface detects (internally) that, this time constraint wasn't met, it
+ * also should return false. Those are N_As and N_Ar timeouts.
+ */
+struct LinuxCanOutputInterface {
+        bool operator() (CanFrame const & /*unused*/) { return true; }
+};
+
 } // namespace tp

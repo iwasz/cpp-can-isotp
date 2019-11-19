@@ -6,7 +6,7 @@
  *  ~~~~~~~~~                                                               *
  ****************************************************************************/
 
-#include "TransportProtocol.h"
+#include "LinuxTransportProtocol.h"
 #include "catch.hpp"
 #include <unistd.h>
 
