@@ -10,7 +10,6 @@
 #include "Address.h"
 #include "CanFrame.h"
 #include "MiscTypes.h"
-#include <cstdint>
 #include <etl/map.h>
 #include <gsl/gsl>
 #include <optional>

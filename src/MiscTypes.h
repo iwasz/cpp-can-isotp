@@ -7,8 +7,7 @@
  ****************************************************************************/
 
 #pragma once
-#include <cstdint>
-#include <gsl/gsl>
+#include "CppCompat.h"
 
 namespace tp {
 
