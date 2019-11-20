@@ -7,9 +7,17 @@
  ****************************************************************************/
 
 #pragma once
-#define ETL_LOG_ERRORS
-#define ETL_VERBOSE_ERRORS
-#define ETL_CHECK_PUSH_POP
 
-#include "etl/profiles/cpp17.h"
+namespace tp {
 
+struct ArduinoTimeProvider {
+        long operator() () const
+        {
+                // TODO
+//                static long i = 0;
+//                return ++i;
+                return 0;
+        }
+};
+
+} // namespace tp

@@ -14,7 +14,7 @@
  * library implemented for this toy platform.
  */
 
-#if defined(__GNUC__) && defined(AVR)
+#if defined(__GNUC__) && (defined(AVR) || defined(ARDUINO))
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -23,9 +23,9 @@
 //#include <gsl/gsl>
 #endif
 
-//#include <array>
+#include <etl/array.h>
 #include <etl/map.h>
-//#include <optional>
+#include <etl/optional.h>
 
 #define Expects(x) assert (x)
 
@@ -45,3 +45,21 @@ template <class Cont> constexpr auto at (Cont &cont, const int i) -> decltype (c
 }
 
 } // namespace gsl
+
+namespace std {
+template <typename _Tp, typename _Up = _Tp &&> _Up __declval (int);
+
+template <typename _Tp> _Tp __declval (long);
+
+template <typename _Tp> auto declval () noexcept -> decltype (__declval<_Tp> (0));
+
+template <typename _Tp> struct __declval_protector {
+        static const bool __stop = false;
+};
+
+template <typename _Tp> auto declval () noexcept -> decltype (__declval<_Tp> (0))
+{
+        static_assert (__declval_protector<_Tp>::__stop, "declval() must not be used!");
+        return __declval<_Tp> (0);
+}
+} // namespace stl

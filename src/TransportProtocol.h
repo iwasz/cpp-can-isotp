@@ -104,10 +104,16 @@ public:
         {
         }
 
-        TransportProtocol (TransportProtocol const &) = delete;
-        TransportProtocol (TransportProtocol &&) = delete;
-        TransportProtocol &operator= (TransportProtocol const &) = delete;
-        TransportProtocol &operator= (TransportProtocol &&) = delete;
+        //        TransportProtocol (TransportProtocol const &) = delete;
+        //        TransportProtocol (TransportProtocol &&) = delete;
+        //        TransportProtocol &operator= (TransportProtocol const &) = delete;
+        //        TransportProtocol &operator= (TransportProtocol &&) = delete;
+
+        // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        TransportProtocol (TransportProtocol const &) = default;
+        TransportProtocol &operator= (TransportProtocol const &) = default;
+        TransportProtocol (TransportProtocol &&) {}
+        TransportProtocol &operator= (TransportProtocol &&) {}
         ~TransportProtocol () = default;
 
         /**
@@ -314,51 +320,51 @@ private:
         /*---------------------------------------------------------------------------*/
 
         /// Checks if callback accepts single IsoMessage param thus has the form callback (IsoMessage msg) TODO use std::is_invocable_v
-        template <typename T, typename = void> struct IsCallbackSimple : public std::false_type {
+        template <typename T, typename = void> struct IsCallbackSimple : public etl::false_type {
         };
 
         /// Checks if callback accepts single IsoMessage param thus has the form callback (IsoMessage msg)
         template <typename T>
-        struct IsCallbackSimple<T, typename std::enable_if<true, decltype ((void)(std::declval<T &> () (IsoMessageT{})))>::type>
-            : public std::true_type {
+        struct IsCallbackSimple<T, typename etl::enable_if<true, decltype ((void)(std::declval<T &> () (IsoMessageT{})))>::type>
+            : public etl::true_type {
         };
 
         /// Checks for a callback which have 3 params like this : Address{}, IsoMessageT{}, Result{}
-        template <typename T, typename = void> struct IsCallbackAdvanced : public std::false_type {
+        template <typename T, typename = void> struct IsCallbackAdvanced : public etl::false_type {
         };
 
         /// Checks for a callback which have 3 params like this : Address{}, IsoMessageT{}, Result{}
         template <typename T>
         struct IsCallbackAdvanced<
-                T, typename std::enable_if<true, decltype ((void)(std::declval<T &> () (Address{}, IsoMessageT{}, Result{})))>::type>
-            : public std::true_type {
+                T, typename etl::enable_if<true, decltype ((void)(std::declval<T &> () (Address{}, IsoMessageT{}, Result{})))>::type>
+            : public etl::true_type {
         };
 
-        template <typename T, typename = void> struct IsCallbackAdvancedMethod : public std::false_type {
+        template <typename T, typename = void> struct IsCallbackAdvancedMethod : public etl::false_type {
         };
 
         template <typename T>
         struct IsCallbackAdvancedMethod<
-                T, typename std::enable_if<true, decltype ((void)(std::declval<T &> ().indication (Address{}, IsoMessageT{}, Result{})))>::type>
-            : public std::true_type {
+                T, typename etl::enable_if<true, decltype ((void)(std::declval<T &> ().indication (Address{}, IsoMessageT{}, Result{})))>::type>
+            : public etl::true_type {
         };
 
-        template <typename T, typename = void> struct HasCallbackConfirmMethod : public std::false_type {
+        template <typename T, typename = void> struct HasCallbackConfirmMethod : public etl::false_type {
         };
 
         template <typename T>
         struct HasCallbackConfirmMethod<
-                T, typename std::enable_if<true, decltype ((void)(std::declval<T &> ().confirm (Address{}, Result{})))>::type>
-            : public std::true_type {
+                T, typename etl::enable_if<true, decltype ((void)(std::declval<T &> ().confirm (Address{}, Result{})))>::type>
+            : public etl::true_type {
         };
 
-        template <typename T, typename = void> struct HasCallbackFFIMethod : public std::false_type {
+        template <typename T, typename = void> struct HasCallbackFFIMethod : public etl::false_type {
         };
 
         template <typename T>
         struct HasCallbackFFIMethod<
-                T, typename std::enable_if<true, decltype ((void)(std::declval<T &> ().firstFrameIndication (Address{}, uint16_t{})))>::type>
-            : public std::true_type {
+                T, typename etl::enable_if<true, decltype ((void)(std::declval<T &> ().firstFrameIndication (Address{}, uint16_t{})))>::type>
+            : public etl::true_type {
         };
 
         void confirm (Address const &a, Result r)

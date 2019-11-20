@@ -114,7 +114,7 @@ struct Normal11AddressEncoder {
          * Create an address from a received CAN frame. This is
          * the address which the remote party used to send the frame to us.
          */
-        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        template <typename CanFrameWrapper> static etl::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
 
@@ -151,7 +151,7 @@ struct Normal29AddressEncoder {
          * Create an address from a received CAN frame. This is
          * the address which the remote party used to send the frame to us.
          */
-        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        template <typename CanFrameWrapper> static etl::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
 
@@ -194,7 +194,7 @@ struct NormalFixed29AddressEncoder {
          * Create an address from a received CAN frame. This is
          * the address which the remote party used to send the frame to us.
          */
-        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        template <typename CanFrameWrapper> static etl::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
 
@@ -230,7 +230,7 @@ struct Extended11AddressEncoder {
 
         static constexpr uint32_t MAX_TA = 0xff;
 
-        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        template <typename CanFrameWrapper> static etl::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
 
@@ -275,7 +275,7 @@ struct Extended29AddressEncoder {
 
         static constexpr uint32_t MAX_TA = 0xff;
 
-        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        template <typename CanFrameWrapper> static etl::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
 
@@ -322,7 +322,7 @@ struct Mixed11AddressEncoder {
          * Create an address from a received CAN frame. This is
          * the address which the remote party used to send the frame to us.
          */
-        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        template <typename CanFrameWrapper> static etl::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 if (f.isExtended () || f.getDlc () < 1 || f.getId () > MAX_11_ID) {
                         return {};
@@ -375,7 +375,7 @@ struct Mixed29AddressEncoder {
          * Create an address from a received CAN frame. This is
          * the address which the remote party used to send the frame to us.
          */
-        template <typename CanFrameWrapper> static std::optional<Address> fromFrame (CanFrameWrapper const &f)
+        template <typename CanFrameWrapper> static etl::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
 

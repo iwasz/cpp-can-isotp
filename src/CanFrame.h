@@ -29,7 +29,7 @@ struct CanFrame {
 
         uint32_t id;
         bool extended;
-        std::array<uint8_t, 8> data;
+        etl::array<uint8_t, 8> data;
         uint8_t dlc;
 };
 
