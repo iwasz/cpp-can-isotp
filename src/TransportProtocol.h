@@ -104,16 +104,11 @@ public:
         {
         }
 
-        //        TransportProtocol (TransportProtocol const &) = delete;
-        //        TransportProtocol (TransportProtocol &&) = delete;
-        //        TransportProtocol &operator= (TransportProtocol const &) = delete;
-        //        TransportProtocol &operator= (TransportProtocol &&) = delete;
-
-        // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        TransportProtocol (TransportProtocol const &) = default;
-        TransportProtocol &operator= (TransportProtocol const &) = default;
-        TransportProtocol (TransportProtocol &&) {}
-        TransportProtocol &operator= (TransportProtocol &&) {}
+        // TODO Consider if to implement it or not
+        TransportProtocol (TransportProtocol const &) = delete;
+        TransportProtocol (TransportProtocol &&) = delete;
+        TransportProtocol &operator= (TransportProtocol const &) = delete;
+        TransportProtocol &operator= (TransportProtocol &&) = delete;
         ~TransportProtocol () = default;
 
         /**
