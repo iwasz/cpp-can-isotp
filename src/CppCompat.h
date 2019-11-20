@@ -18,16 +18,10 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
-#else
-#include <cstdint>
-//#include <gsl/gsl>
-#endif
 
-//#include <array>
-#include <etl/map.h>
-//#include <optional>
-
+#if !defined Expects
 #define Expects(x) assert (x)
+#endif
 
 namespace gsl {
 
@@ -43,5 +37,15 @@ template <class Cont> constexpr auto at (Cont &cont, const int i) -> decltype (c
         using size_type = decltype (cont.size ());
         return cont[static_cast<size_type> (i)];
 }
-
 } // namespace gsl
+#else
+#include <cstdint>
+#include <gsl/gsl>
+#endif
+
+#include <array>
+#include <etl/map.h>
+#include <optional>
+
+
+
