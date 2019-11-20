@@ -18,16 +18,14 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
-#else
-#include <cstdint>
-//#include <gsl/gsl>
-#endif
 
 #include <etl/array.h>
 #include <etl/map.h>
 #include <etl/optional.h>
 
+#if !defined Expects
 #define Expects(x) assert (x)
+#endif
 
 namespace gsl {
 
@@ -43,7 +41,6 @@ template <class Cont> constexpr auto at (Cont &cont, const int i) -> decltype (c
         using size_type = decltype (cont.size ());
         return cont[static_cast<size_type> (i)];
 }
-
 } // namespace gsl
 
 namespace std {
@@ -62,4 +59,11 @@ template <typename _Tp> auto declval () noexcept -> decltype (__declval<_Tp> (0)
         static_assert (__declval_protector<_Tp>::__stop, "declval() must not be used!");
         return __declval<_Tp> (0);
 }
-} // namespace stl
+} // namespace std
+#else
+#include <cstdint>
+#include <gsl/gsl>
+#endif
+
+#include <etl/map.h>
+#include <etl/optional.h>

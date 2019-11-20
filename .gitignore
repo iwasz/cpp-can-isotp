@@ -4,3 +4,4 @@ build-cpp-can*
 .vscode
 build/
 .clangd
+compile_commands.json
