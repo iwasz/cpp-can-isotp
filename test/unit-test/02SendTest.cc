@@ -8,6 +8,7 @@
 
 #include "LinuxTransportProtocol.h"
 #include "catch.hpp"
+#include <etl/vector.h>
 #include <unistd.h>
 
 using namespace tp;
@@ -291,4 +292,56 @@ TEST_CASE ("tx 1B timeout", "[send]")
 
         // REQUIRE (!tp.send (Address (0x67, 0x89), {0x55}));
         // REQUIRE (called);
+}
+
+TEST_CASE ("tx 4096B ETL", "[send]")
+{
+        using MyIsoMessage = etl::vector<uint8_t, 128>;
+
+        int calledTimes = 0;
+        auto tp = create<CanFrame, Normal29AddressEncoder, MyIsoMessage, 128> (
+                {0, 0}, [] (auto const & /* unused*/) {},
+                [&calledTimes] (auto const &canFrame) {
+                        // 1. It should send a first frame
+                        if (calledTimes == 0) {
+                                REQUIRE (int (canFrame.data[0]) == 0x10); // FISRT FRAME
+                                REQUIRE (int (canFrame.data[1]) == 13);   // 13B length
+                                REQUIRE (int (canFrame.data[2]) == 0);    // First byte
+                                REQUIRE (int (canFrame.data[3]) == 1);
+                                REQUIRE (int (canFrame.data[4]) == 2);
+                                REQUIRE (int (canFrame.data[5]) == 3);
+                                REQUIRE (int (canFrame.data[6]) == 4);
+                                REQUIRE (int (canFrame.data[7]) == 5);
+                                ++calledTimes;
+                                return true;
+                        }
+
+                        // 1. It should send a first frame
+                        if (calledTimes == 1) {
+                                REQUIRE (int (canFrame.data[0]) == 0x21); // CONSECUTIVE FRAME, serial number 1
+                                REQUIRE (int (canFrame.data[1]) == 6);
+                                REQUIRE (int (canFrame.data[2]) == 7);
+                                REQUIRE (int (canFrame.data[3]) == 8);
+                                REQUIRE (int (canFrame.data[4]) == 9);
+                                REQUIRE (int (canFrame.data[5]) == 10);
+                                REQUIRE (int (canFrame.data[6]) == 11);
+                                REQUIRE (int (canFrame.data[7]) == 12);
+                                ++calledTimes;
+                                return true;
+                        }
+
+                        return false;
+                });
+
+        tp.send (Address (0x00, 0x00), MyIsoMessage{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+        tp.run ();                                      // IDLE -> SEND_FIRST_FRAME
+        tp.run ();                                      // SEND_FIRST_FRAME -> RECEIVE_FLOW_FRAME
+        tp.onCanNewFrame (CanFrame (0x00, true, 0x30)); // RECEIVE_FLOW_FRAME -> SEND_CONSECUTIVE_FRAME
+        tp.run ();                                      // SEND_CONSECUTIVE_FRAME -> DONE
+
+        while (tp.isSending ()) {
+                tp.run ();
+        }
+
+        REQUIRE (calledTimes == 2);
 }
