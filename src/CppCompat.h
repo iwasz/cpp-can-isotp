@@ -14,7 +14,7 @@
  * library implemented for this toy platform.
  */
 
-#if defined(__GNUC__) && (defined(AVR) || defined(ARDUINO))
+#if defined(__GNUC__) && (defined(AVR) || defined(ARDUINO) || defined (ARDUINO_ARCH_AVR))
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
