@@ -7,6 +7,7 @@
  ****************************************************************************/
 
 #pragma once
+#include <Arduino.h>
 
 namespace tp {
 
@@ -14,13 +15,7 @@ namespace tp {
  * @brief The ArduinoTimeProvider struct
  */
 struct ArduinoTimeProvider {
-        long operator() () const
-        {
-                // TODO
-                //                static long i = 0;
-                //                return ++i;
-                return 0;
-        }
+        long operator() () const { return millis (); }
 };
 
 } // namespace tp
