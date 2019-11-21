@@ -7,10 +7,7 @@
  ****************************************************************************/
 
 #pragma once
-//#include "ArduinoCanFrame.h"
-//#include "ArduinoTypes.h"
 #include "CanFrame.h"
-#include "TransportProtocol.h"
 #include <mcp2515.h>
 
 namespace tp {
@@ -67,38 +64,5 @@ public:
 private:
         can_frame frame{};
 };
-
-/**
- * Sending a single can Frame on Arduino using https://github.com/autowp/arduino-mcp2515
- */
-struct ArduinoCanOutputInterface {
-        bool operator() (CanFrame const & /*unused*/) { return true; }
-};
-/**
- * @brief The ArduinoTimeProvider struct
- */
-struct ArduinoTimeProvider {
-        long operator() () const
-        {
-                // TODO
-                //                static long i = 0;
-                //                return ++i;
-                return 0;
-        }
-};
-
-/*****************************************************************************/
-
-template <typename CanFrameT = CanFrame, typename AddressResolverT = Normal29AddressEncoder, typename IsoMessageT /*= IsoMessage*/,
-          size_t MAX_MESSAGE_SIZE = MAX_ALLOWED_ISO_MESSAGE_SIZE, typename CanOutputInterfaceT /*= LinuxCanOutputInterface*/,
-          typename TimeProviderT /*= ChronoTimeProvider*/, typename ExceptionHandlerT = InfiniteLoop, typename CallbackT /*= CoutPrinter*/>
-auto create (Address const &myAddress, CallbackT callback, CanOutputInterfaceT outputInterface /*= {}*/, TimeProviderT timeProvider /* = {}*/,
-             ExceptionHandlerT errorHandler /*= {}*/)
-{
-        using TP = TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT,
-                                                             TimeProviderT, ExceptionHandlerT, CallbackT, 4>>;
-
-        return TP{myAddress, callback, outputInterface, timeProvider, errorHandler};
-}
 
 } // namespace tp
