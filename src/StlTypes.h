@@ -18,7 +18,7 @@ class CanFrame;
 
 /**
  * @brief The TimeProvider struct
- * TODO if I'm not mistaken, this classes ought to have 100µs resolutiuon instead of 1ms (1000µs).
+ * TODO if I'm not mistaken, those classes ought to have 100µs resolutiuon instead of 1ms (1000µs).
  */
 struct ChronoTimeProvider {
         long operator() () const

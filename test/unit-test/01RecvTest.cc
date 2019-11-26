@@ -8,6 +8,7 @@
 
 #include "LinuxTransportProtocol.h"
 #include "catch.hpp"
+#include <etl/vector.h>
 
 using namespace tp;
 
@@ -166,6 +167,70 @@ TEST_CASE ("rx 4095B", "[recv]")
         sn %= 16;
         // First frame had 6B, then in the loop we add 584*7 = 4088, and then only 1. 6+4088+1 == 4095 == 0xfff
         tp.onCanNewFrame (CanFrame (0x00, true, 0x20 | sn, j));
+
+        REQUIRE (called);
+        REQUIRE (flow);
+}
+
+/**
+ * This tests one particular problem I've had.
+ * MessagePack data :
+ * [131, 163, 114, 101, 113, 1, 164, 97, 100, 100, 114, 0, 163, 118, 97, 108, 1]
+ *
+ * means:
+ * {
+ *   "req": 1,
+ *   "addr": 0,
+ *   "val": 1
+ * }
+ *
+ * In the CAN layer it should look like this:
+ *
+ * slcan0  18DA2211   [8]  10 11 83 A3 72 65 71 01
+ * slcan0  18DA1122   [3]  30 00 01
+ * slcan0  18DA2211   [8]  21 A4 61 64 64 72 00 A3
+ * slcan0  18DA2211   [5]  22 76 61 6C 01
+ */
+TEST_CASE ("rx MessagePack", "[recv]")
+{
+        bool called = false;
+        bool flow = false;
+
+        static constexpr size_t ISO_MESSAGE_SIZE = 512;
+        using MyIsoMessage = etl::vector<uint8_t, ISO_MESSAGE_SIZE>;
+        auto tp = create<CanFrame, NormalFixed29AddressEncoder, MyIsoMessage, ISO_MESSAGE_SIZE> (
+                Address{0x00, 0x00, 0x22, 0x11},
+                [&called] (auto const &tm) {
+                        called = true;
+                        REQUIRE (tm.size () == 17);
+                        REQUIRE (tm[0] == 131);
+                        REQUIRE (tm[1] == 163);
+                        REQUIRE (tm[2] == 114);
+                        REQUIRE (tm[3] == 101);
+                        REQUIRE (tm[4] == 113);
+                        REQUIRE (tm[5] == 1);
+                        REQUIRE (tm[6] == 164);
+                        REQUIRE (tm[7] == 97);
+                        REQUIRE (tm[8] == 100);
+                        REQUIRE (tm[9] == 100);
+                        REQUIRE (tm[10] == 114);
+                        REQUIRE (tm[11] == 0);
+                        REQUIRE (tm[12] == 163);
+                        REQUIRE (tm[13] == 118);
+                        REQUIRE (tm[14] == 97);
+                        REQUIRE (tm[15] == 108);
+                        REQUIRE (tm[16] == 1);
+                },
+                [&flow] (auto &&canFrame) {
+                        flow = true;
+                        REQUIRE (canFrame.data[0] == 0x30);
+                        return true;
+                });
+
+        tp.onCanNewFrame (CanFrame (0x18DA2211, true, 0x10, 0x11, 0x83, 0xA3, 0x72, 0x65, 0x71, 0x01));
+        // Here it responds with (it should respond) 18DA1122   [3]  30 00 01
+        tp.onCanNewFrame (CanFrame (0x18DA2211, true, 0x21, 0xA4, 0x61, 0x64, 0x64, 0x72, 0x00, 0xA3));
+        tp.onCanNewFrame (CanFrame (0x18DA2211, true, 0x22, 0x76, 0x61, 0x6C, 0x01));
 
         REQUIRE (called);
         REQUIRE (flow);
