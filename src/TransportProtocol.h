@@ -176,7 +176,12 @@ public:
          * This value will be sent in first flow control flow frame, and it tells the peer
          * how long to wait between sending consecutive frames. This is to offload the receiver.
          * Paragraph 6.5.5.5 in the 2004 ISO document. Default value 0 means that everything
-         * has to be sent immediately.
+         * has to be sent immediately. Values are:
+         *
+         * - 0x00 : 0x7f -> 0 : 127 ms.
+         * - 0xf1 : 0xf9 -> 100 : 900 µs.
+         *
+         * Other values are reserved.
          */
         void setSeparationTime (uint8_t s)
         {

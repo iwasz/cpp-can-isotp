@@ -116,7 +116,9 @@ Addressing is somewhat vaguely described in the 2004 ISO document I have, so the
 
 The important thing to note here is that not all of them are used at the same time but rather, depending on addressing encoder (i.e. one of the addressing modes) used, a subset is used. 
 
-
+# Platform speciffic remarks
+## Arduino
+I successfully ported and tested this library to Arduino (see examples directory). Currently only [autowp/arduino-mcp2515](https://github.com/autowp/arduino-mcp2515) CAN implementation is supported. Be sure to experiment with separation time (use ```TransportProtocol::setSeparationTime```) to be sure that your board can keep up with receiving fast CAN frames bursts.
 
 # (part of the tutorial)
 ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if move semantics arent implemented for your ISO message class.
@@ -125,7 +127,11 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 * I don't use exceptions because on a Coretex-M target enabling them increased the binary size by 13kB (around 10% increase). I use error codes (?) in favour of a error handler only because cpp-core-guidelines doest that.
 
 # TODOs, changes
-
+- [x] NO! Even when sending we must be able to receive a flow control frame. make specialization for void (and/or) 0-sized isoMessages. Such an implementation would be able to send only.
+- [ ] Describe (in this README) various callback options!
+- [ ] Once again rethink ```TransportProtocol::send``` interface. Previously it had pass-by-value agrgument, now I switched (switched back?) to universal-reference. 
+- [ ] Make section here in the README about passing IsoMessages to ```TransportProtocol::send```. Show lvl, rvr (use std::move explicitly to make a point), and std::ref.
+- [ ] Test errorneus sequences of canFrames during assemblying segemnted messages. Make an unit test of that. For example on slower receivers some can frames can be lost, and this fact should be detected and reported to the user. 
 - [ ] Add Stm32 example.
 - [ ] Move ```example``` from test to root, rename to ```examples```. Add Ardiono example with ino extension.
 - [ ] Extend Linux example, implement CAN interface properly using boost::asio.
