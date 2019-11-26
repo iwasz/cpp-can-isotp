@@ -7,16 +7,18 @@
  ****************************************************************************/
 
 #pragma once
-#include "ArduinoTypes.h"
+#include "ArduinoExceptionHandler.h"
+#include "ArduinoMcp2515Can.h"
+#include "ArduinoTimeProvider.h"
 #include "TransportProtocol.h"
 
 namespace tp {
 
-template <typename CanFrameT = CanFrame, typename AddressResolverT = Normal29AddressEncoder, typename IsoMessageT /*= IsoMessage*/,
-          size_t MAX_MESSAGE_SIZE = MAX_ALLOWED_ISO_MESSAGE_SIZE, typename CanOutputInterfaceT /*= LinuxCanOutputInterface*/,
-          typename TimeProviderT /*= ChronoTimeProvider*/, typename ExceptionHandlerT = InfiniteLoop, typename CallbackT /*= CoutPrinter*/>
-auto create (Address const &myAddress, CallbackT callback, CanOutputInterfaceT outputInterface /*= {}*/, TimeProviderT timeProvider/* = {}*/,
-             ExceptionHandlerT errorHandler /*= {}*/)
+template <typename CanFrameT = can_frame, typename AddressResolverT = Normal29AddressEncoder, typename IsoMessageT /*= IsoMessage*/,
+          size_t MAX_MESSAGE_SIZE = MAX_ALLOWED_ISO_MESSAGE_SIZE, typename CanOutputInterfaceT, typename TimeProviderT = ArduinoTimeProvider,
+          typename ExceptionHandlerT = ArduinoExceptionHandler, typename CallbackT>
+auto create (Address const &myAddress, CallbackT callback, CanOutputInterfaceT outputInterface, TimeProviderT timeProvider = {},
+             ExceptionHandlerT errorHandler = {})
 {
         using TP = TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT,
                                                              TimeProviderT, ExceptionHandlerT, CallbackT, 4>>;

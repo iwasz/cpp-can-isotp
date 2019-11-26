@@ -7,16 +7,15 @@
  ****************************************************************************/
 
 #pragma once
+#include <Arduino.h>
 
 namespace tp {
 
-struct ArduinoTimeProvider {
-        long operator() () const
+struct ArduinoExceptionHandler {
+        template <typename T> void operator() (T const &error)
         {
-                // TODO
-//                static long i = 0;
-//                return ++i;
-                return 0;
+                Serial.print ("CAN ISO TP erorr : ");
+                Serial.println (int (error));
         }
 };
 

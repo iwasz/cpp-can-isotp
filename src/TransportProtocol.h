@@ -12,6 +12,8 @@
 #include "CppCompat.h"
 #include "MiscTypes.h"
 
+#include "Arduino.h"
+
 /**
  * Set maximum number of Flow Control frames with WAIT bit set that can be received
  * before aborting further transmission of pending message. Check paragraph 6.6 of ISO
@@ -104,16 +106,11 @@ public:
         {
         }
 
-        //        TransportProtocol (TransportProtocol const &) = delete;
-        //        TransportProtocol (TransportProtocol &&) = delete;
-        //        TransportProtocol &operator= (TransportProtocol const &) = delete;
-        //        TransportProtocol &operator= (TransportProtocol &&) = delete;
-
-        // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        TransportProtocol (TransportProtocol const &) = default;
-        TransportProtocol &operator= (TransportProtocol const &) = default;
-        TransportProtocol (TransportProtocol &&) {}
-        TransportProtocol &operator= (TransportProtocol &&) {}
+        // TODO Consider whether to implement copy / move semantics or not.
+        TransportProtocol (TransportProtocol const &) = delete;
+        TransportProtocol (TransportProtocol &&) = delete;
+        TransportProtocol &operator= (TransportProtocol const &) = delete;
+        TransportProtocol &operator= (TransportProtocol &&) = delete;
         ~TransportProtocol () = default;
 
         /**
@@ -122,7 +119,7 @@ public:
          * processing, and then via run method is send in multiple CONSECUTIVE_FRAMES.
          * In ISO this method is called a 'request'
          */
-        bool send (Address const &a, IsoMessageT msg);
+        template <typename IsoMessageSup = IsoMessageT> bool send (Address const &a, IsoMessageSup &&msg);
 
         /**
          * Sends a message. If msg is so long, that it wouldn't fit in a SINGLE_FRAME (6 or 7 bytes
@@ -130,7 +127,10 @@ public:
          * processing, and then via run method is send in multiple CONSECUTIVE_FRAMES.
          * In ISO this method is called a 'request'
          */
-        bool send (IsoMessageT msg) { return send (myAddress, std::move (msg)); }
+        template <typename IsoMessageSup = IsoMessageT> bool send (IsoMessageSup &&msg)
+        {
+                return send (myAddress, std::forward<IsoMessageSup> (msg));
+        }
 
         /**
          * Does the book keeping (checks for timeouts, runs the sending state machine).
@@ -430,7 +430,7 @@ private:
 
 /*****************************************************************************/
 
-template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address &a, IsoMessageT msg)
+template <typename TraitsT> template <typename IsoMessageSup> bool TransportProtocol<TraitsT>::send (const Address &a, IsoMessageSup &&msg)
 {
         if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
                 return false;
@@ -440,11 +440,11 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
         const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (AddressTraitsT::USING_EXTENDED);
 
         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
-                return sendSingleFrame (a, msg);
+                return sendSingleFrame (a, std::forward<IsoMessageSup> (msg));
         }
 
-        // Send using multiple frames, state machine, and timing controll and whatnot.
-        return sendMultipleFrames (a, std::move (msg));
+        // Send using multiple frames, state machine, and timing control and whatnot.
+        return sendMultipleFrames (a, std::move<IsoMessageSup> (msg));
 }
 
 /*****************************************************************************/
@@ -820,7 +820,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                                 receivedSeparationTimeUs = (receivedSeparationTimeUs - 0xf0) * 100;
                         }
                         else {
-                                receivedSeparationTimeUs = 0x7f * 1000; // 6.5.5.6 ST error handling
+                                receivedSeparationTimeUs = uint32_t (0x7f) * 1000; // 6.5.5.6 ST error handling
                         }
                 }
 
