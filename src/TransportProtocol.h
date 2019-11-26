@@ -815,7 +815,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                                 receivedSeparationTimeUs = (receivedSeparationTimeUs - 0xf0) * 100;
                         }
                         else {
-                                receivedSeparationTimeUs = 0x7f * 1000; // 6.5.5.6 ST error handling
+                                receivedSeparationTimeUs = uint32_t (0x7f) * 1000; // 6.5.5.6 ST error handling
                         }
                 }
 
