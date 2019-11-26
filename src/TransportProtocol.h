@@ -106,7 +106,7 @@ public:
         {
         }
 
-        // TODO Consider if to implement it or not
+        // TODO Consider whether to implement copy / move semantics or not.
         TransportProtocol (TransportProtocol const &) = delete;
         TransportProtocol (TransportProtocol &&) = delete;
         TransportProtocol &operator= (TransportProtocol const &) = delete;
