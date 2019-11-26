@@ -12,8 +12,6 @@
 #include "CppCompat.h"
 #include "MiscTypes.h"
 
-#include "Arduino.h"
-
 /**
  * Set maximum number of Flow Control frames with WAIT bit set that can be received
  * before aborting further transmission of pending message. Check paragraph 6.6 of ISO
@@ -119,7 +117,9 @@ public:
          * processing, and then via run method is send in multiple CONSECUTIVE_FRAMES.
          * In ISO this method is called a 'request'
          */
-        template <typename IsoMessageSup = IsoMessageT> bool send (Address const &a, IsoMessageSup &&msg);
+        // template <typename IsoMessageSup = IsoMessageT> bool send (Address const &a, IsoMessageSup &&msg);
+        bool send (Address const &a, IsoMessageT &&msg);
+        bool send (Address const &a, IsoMessageT const &msg);
 
         /**
          * Sends a message. If msg is so long, that it wouldn't fit in a SINGLE_FRAME (6 or 7 bytes
@@ -430,7 +430,24 @@ private:
 
 /*****************************************************************************/
 
-template <typename TraitsT> template <typename IsoMessageSup> bool TransportProtocol<TraitsT>::send (const Address &a, IsoMessageSup &&msg)
+// template <typename TraitsT> template <typename IsoMessageSup> bool TransportProtocol<TraitsT>::send (const Address &a, IsoMessageSup &&msg)
+// {
+//         if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
+//                 return false;
+//         }
+
+//         // 6 or 7 depending on addressing used
+//         const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (AddressTraitsT::USING_EXTENDED);
+
+//         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
+//                 return sendSingleFrame (a, std::forward<IsoMessageSup> (msg));
+//         }
+
+//         // Send using multiple frames, state machine, and timing control and whatnot.
+//         return sendMultipleFrames (a, std::forward<IsoMessageSup> (msg));
+// }
+
+template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address &a, IsoMessageT &&msg)
 {
         if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
                 return false;
@@ -440,11 +457,28 @@ template <typename TraitsT> template <typename IsoMessageSup> bool TransportProt
         const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (AddressTraitsT::USING_EXTENDED);
 
         if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
-                return sendSingleFrame (a, std::forward<IsoMessageSup> (msg));
+                return sendSingleFrame (a, msg);
         }
 
         // Send using multiple frames, state machine, and timing control and whatnot.
-        return sendMultipleFrames (a, std::move<IsoMessageSup> (msg));
+        return sendMultipleFrames (a, std::move (msg));
+}
+
+template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address &a, IsoMessageT const &msg)
+{
+        if (msg.size () > MAX_ACCEPTED_ISO_MESSAGE_SIZE) {
+                return false;
+        }
+
+        // 6 or 7 depending on addressing used
+        const size_t SINGLE_FRAME_MAX_SIZE = 7 - int (AddressTraitsT::USING_EXTENDED);
+
+        if (msg.size () <= SINGLE_FRAME_MAX_SIZE) { // Send using single Frame
+                return sendSingleFrame (a, msg);
+        }
+
+        // Send using multiple frames, state machine, and timing control and whatnot.
+        return sendMultipleFrames (a, IsoMessageT (msg));
 }
 
 /*****************************************************************************/
