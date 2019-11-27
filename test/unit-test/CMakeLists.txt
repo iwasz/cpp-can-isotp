@@ -2,7 +2,13 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 SET (CMAKE_VERBOSE_MAKEFILE OFF)
 
 SET (CMAKE_BUILD_TYPE Debug)
-SET(CMAKE_CXX_FLAGS "-std=c++17 -Wall" CACHE INTERNAL "cxx compiler flags")
+
+# TODO can't get it to work with ninja...
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fsanitize=address -fsanitize=leak")
+SET (CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fsanitize=address -fsanitize=leak")
+SET (CMAKE_EXE_LINKER_FLAGS:STRING "-fsanitize=address  -fsanitize=leak")
+SET (CMAKE_MODULE_LINKER_FLAGS:STRING "-fsanitize=address  -fsanitize=leak")
+
 include_directories("./")
 
 ENABLE_TESTING ()
@@ -10,7 +16,6 @@ ENABLE_TESTING ()
 ADD_DEFINITIONS ("-DUNIT_TEST=1")
 ADD_EXECUTABLE(unit-test
     "../../src/Address.h"
-    "../../src/ArduinoTransportProtocol.h"
     "../../src/CanFrame.h"
     "../../src/CppCompat.h"
     "../../src/LinuxCanFrame.h"
