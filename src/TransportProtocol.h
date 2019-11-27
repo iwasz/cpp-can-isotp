@@ -297,6 +297,16 @@ private:
                         myAddress = a;
                         message = std::move (m);
                         state = State::IDLE;
+
+                        bytesSent = 0;
+                        blocksSent = 0;
+                        sequenceNumber = 1;
+                        receivedBlockSize = 0;
+                        receivedSeparationTimeUs = 0;
+                        waitFrameNumber = 0;
+
+                        separationTimer.start (0);
+                        bsCrTimer.start (0);
                 }
 
                 Status run (CanFrameWrapperType const *frame = nullptr);

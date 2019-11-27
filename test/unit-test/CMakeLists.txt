@@ -4,10 +4,12 @@ SET (CMAKE_VERBOSE_MAKEFILE OFF)
 SET (CMAKE_BUILD_TYPE Debug)
 
 # TODO can't get it to work with ninja...
-SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fsanitize=address -fsanitize=leak")
-SET (CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fsanitize=address -fsanitize=leak")
-SET (CMAKE_EXE_LINKER_FLAGS:STRING "-fsanitize=address  -fsanitize=leak")
-SET (CMAKE_MODULE_LINKER_FLAGS:STRING "-fsanitize=address  -fsanitize=leak")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
+SET (CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
+# SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fsanitize=address -fsanitize=leak")
+# SET (CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall -fsanitize=address -fsanitize=leak")
+# SET (CMAKE_EXE_LINKER_FLAGS:STRING "-fsanitize=address  -fsanitize=leak")
+# SET (CMAKE_MODULE_LINKER_FLAGS:STRING "-fsanitize=address  -fsanitize=leak")
 
 include_directories("./")
 
