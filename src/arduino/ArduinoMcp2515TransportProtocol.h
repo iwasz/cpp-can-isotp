@@ -21,7 +21,7 @@ auto create (Address const &myAddress, CallbackT callback, CanOutputInterfaceT o
              ExceptionHandlerT errorHandler = {})
 {
         using TP = TransportProtocol<TransportProtocolTraits<CanFrameT, IsoMessageT, MAX_MESSAGE_SIZE, AddressResolverT, CanOutputInterfaceT,
-                                                             TimeProviderT, ExceptionHandlerT, CallbackT, 4>>;
+                                                             TimeProviderT, ExceptionHandlerT, CallbackT, 1>>;
 
         return TP{myAddress, callback, outputInterface, timeProvider, errorHandler};
 }
