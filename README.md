@@ -210,3 +210,42 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 - [ ] Get rid of non English comments.
 - [ ] Finish this TODO
 - [ ] Calls like this : ```indication (*theirAddress, {}, Result::N_UNEXP_PDU);``` are potentially inefficient if IsoMessageT internally allocates on the stack (etl::vector for example). Possible solution would be to pass by pointer and pass nullptr in such cases, but that would be inconvenient for the end user.
+- [ ] ~~Problem with sequence numbers. Sometimes python can-isotp library would dump the following error message (sequence numbers are various)~~ This was a problem on the other part of the connection. Python app has had synchronisation problems:
+
+INFO:root:Preparing the telemetry...
+WARNING:root:IsoTp error happened : WrongSequenceNumberError - Received a ConsecutiveFrame with wrong SequenceNumber. Expecting 0x2, Received 0x3
+WARNING:root:IsoTp error happened : UnexpectedConsecutiveFrameError - Received a ConsecutiveFrame while reception was idle. Ignoring
+WARNING:isotp:Received a ConsecutiveFrame with wrong SequenceNumber. Expecting 0x2, Received 0x3
+WARNING:isotp:Received a ConsecutiveFrame while reception was idle. Ignoring
+WARNING:root:Device thermometer_1 is UNSTABLE
+ERROR:root:Exception in prepareTelemetry task
+Traceback (most recent call last):
+  File "/home/iwasz/workspace/nbox/nbox-raspi/src/telemetry.py", line 82, in prepareTelemetry
+    await aggregateStore()
+  File "/home/iwasz/workspace/nbox/nbox-raspi/src/engine.py", line 34, in aggregateStore
+    cachedValues = await cacheValuesForDevice(
+  File "/home/iwasz/workspace/nbox/nbox-raspi/src/engine.py", line 187, in cacheValuesForDevice
+    value = await device.request(deviceName, propertyName)
+  File "/home/iwasz/workspace/nbox/nbox-raspi/src/device/device.py", line 55, in request
+    return await getattr(self, command)()
+  File "/home/iwasz/workspace/nbox/nbox-raspi/src/device/external/oneWireSensors.py", line 70, in getTemperature
+    data = await onewire.readBytes(self.port, 9)
+  File "/home/iwasz/workspace/nbox/nbox-raspi/src/core/onewire.py", line 68, in readBytes
+    decoded = await messagePack.measurementsRequest(
+  File "/home/iwasz/workspace/nbox/nbox-raspi/src/core/messagePack.py", line 49, in measurementsRequest
+    return await asyncio.wait_for(
+  File "/usr/lib/python3.8/asyncio/tasks.py", line 490, in wait_for
+    raise exceptions.TimeoutError()
+asyncio.exceptions.TimeoutError
+INFO:root:Sending current telemetry...
+
+# License
+[MIT](https://opensource.org/licenses/MIT)
+
+Copyright 2021 Łukasz Iwaszkiewicz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
