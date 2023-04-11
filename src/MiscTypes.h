@@ -64,6 +64,6 @@ struct EmptyCallback {
 enum class IsoNPduType { SINGLE_FRAME = 0, FIRST_FRAME = 1, CONSECUTIVE_FRAME = 2, FLOW_FRAME = 3 };
 
 /// FS field in Flow Control Frame
-enum class FlowStatus { CONTINUE_TO_SEND = 0, WAIT = 1, OVERFLOW = 2 };
+enum class FlowStatus { CONTINUE_TO_SEND = 0, WAIT = 1, OVERFLOWED = 2 };
 
 } // namespace tp

@@ -579,7 +579,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
 
                 // 6.5.3.3 Error situation : too much data. Should reply with apropriate flow control frame.
                 if (multiFrameRemainingLen > MAX_ACCEPTED_ISO_MESSAGE_SIZE || multiFrameRemainingLen > MAX_ALLOWED_ISO_MESSAGE_SIZE) {
-                        sendFlowFrame (outgoingAddress, FlowStatus::OVERFLOW);
+                        sendFlowFrame (outgoingAddress, FlowStatus::OVERFLOWED);
                         return false;
                 }
 
@@ -830,12 +830,12 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
                 FlowStatus fs = Traits::getFlowStatus (*frame);
 
-                if (fs != FlowStatus::CONTINUE_TO_SEND && fs != FlowStatus::WAIT && fs != FlowStatus::OVERFLOW) {
+                if (fs != FlowStatus::CONTINUE_TO_SEND && fs != FlowStatus::WAIT && fs != FlowStatus::OVERFLOWED) {
                         tp.confirm (*theirAddress, Result::N_INVALID_FS); // 6.5.5.3
                         state = State::DONE;                              // abort
                 }
 
-                if (fs == FlowStatus::OVERFLOW) {
+                if (fs == FlowStatus::OVERFLOWED) {
                         tp.confirm (*theirAddress, Result::N_BUFFER_OVFLW);
                         state = State::DONE; // abort
                 }
