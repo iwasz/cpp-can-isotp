@@ -234,10 +234,6 @@ struct Extended11AddressEncoder {
         {
                 auto fId = f.getId ();
 
-                if (fId > MAX_11_ID) {
-                        return {};
-                }
-
                 if (f.isExtended () || fId > MAX_11_ID || f.getDlc () < 1) {
                         return {};
                 }
@@ -278,10 +274,6 @@ struct Extended29AddressEncoder {
         template <typename CanFrameWrapper> static etl::optional<Address> fromFrame (CanFrameWrapper const &f)
         {
                 auto fId = f.getId ();
-
-                if (fId > MAX_29_ID) {
-                        return {};
-                }
 
                 if (!f.isExtended () || fId > MAX_29_ID || f.getDlc () < 1) {
                         return {};
