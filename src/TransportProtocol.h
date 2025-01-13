@@ -767,8 +767,8 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 state = State::DONE;
         }
 
-        IsoMessageT *message = &this->message;
-        uint16_t isoMessageSize = message->size ();
+        IsoMessageT const &message = this->message;
+        uint16_t isoMessageSize = message.size ();
         using Traits = AddressTraits<AddressEncoderT>;
 
         switch (state) {
@@ -788,7 +788,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 int toSend = std::min<int> (isoMessageSize, 6);
 
                 for (int i = 0; i < toSend; ++i) {
-                        canFrame.set (i + 2, message->at (i));
+                        canFrame.set (i + 2, message.at (i));
                 }
 
                 canFrame.setDlc (2 + toSend);
@@ -890,7 +890,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
                 int toSend = std::min<int> (isoMessageSize - bytesSent, 7);
                 for (int i = 0; i < toSend; ++i) {
-                        canFrame.set (i + 1, message->at (i + bytesSent));
+                        canFrame.set (i + 1, message.at (i + bytesSent));
                 }
 
                 canFrame.setDlc (1 + toSend);
@@ -903,7 +903,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
                 bytesSent += toSend;
 
-                if (bytesSent >= message->size ()) {
+                if (bytesSent >= message.size ()) {
                         state = State::DONE;
                         break;
                 }
