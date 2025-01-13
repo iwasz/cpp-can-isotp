@@ -13,7 +13,7 @@
 namespace tp {
 
 /**
- * Wrapper for particular can frame type we are using ini this program (namely
+ * Wrapper for particular can frame type we are using in this program (namely
  * can_frame in this case).
  */
 template <> class CanFrameWrapper<can_frame> {
@@ -68,11 +68,11 @@ private:
 
 /**
  * This interface assumes that sending single CAN frame is instant and we
- * now the status (whether it failed or succeeded) instantly (thus boolean)
+ * know the status (whether it failed or succeeded) instantly (thus boolean)
  * return type.
  *
- * Important! If this interface fails, it shoud return false. Also, ISO requires,
- * that sending a CAN message shoud take not more as 1000ms + 50% i.e. 1500ms. If
+ * Important! If this interface fails, it should return false. Also, ISO requires,
+ * that sending a CAN message should take not more as 1000ms + 50% i.e. 1500ms. If
  * this interface detects (internally) that, this time constraint wasn't met, it
  * also should return false. Those are N_As and N_Ar timeouts.
  */

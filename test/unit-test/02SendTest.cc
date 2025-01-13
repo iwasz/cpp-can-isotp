@@ -63,7 +63,7 @@ TEST_CASE ("tx 8B", "[send]")
                 [&calledTimes] (auto const &canFrame) {
                         // 1. It should send a first frame
                         if (calledTimes == 0) {
-                                REQUIRE (int (canFrame.data[0]) == 0x10); // FISRT FRAME
+                                REQUIRE (int (canFrame.data[0]) == 0x10); // FIRST FRAME
                                 REQUIRE (int (canFrame.data[1]) == 8);    // 8B length
                                 REQUIRE (int (canFrame.data[2]) == 0);    // First byte
                                 REQUIRE (int (canFrame.data[3]) == 1);
@@ -75,7 +75,7 @@ TEST_CASE ("tx 8B", "[send]")
                                 return true;
                         }
 
-                        // 1. It should send a first frame
+                        // 2. It should send a consecutive frame
                         if (calledTimes == 1) {
                                 REQUIRE (int (canFrame.data[0]) == 0x21); // CONSECUTIVE FRAME, serial number 1
                                 REQUIRE (int (canFrame.data[1]) == 6);    // actual data - 7th byte
@@ -110,7 +110,7 @@ TEST_CASE ("tx 12B", "[send]")
                 [&calledTimes] (auto &&canFrame) {
                         // 1. It should send a first frame
                         if (calledTimes == 0) {
-                                REQUIRE (int (canFrame.data[0]) == 0x10); // FISRT FRAME
+                                REQUIRE (int (canFrame.data[0]) == 0x10); // FIRST FRAME
                                 REQUIRE (int (canFrame.data[1]) == 13);   // 13B length
                                 REQUIRE (int (canFrame.data[2]) == 0);    // First byte
                                 REQUIRE (int (canFrame.data[3]) == 1);
@@ -122,7 +122,7 @@ TEST_CASE ("tx 12B", "[send]")
                                 return true;
                         }
 
-                        // 1. It should send a first frame
+                        // 2. It should send a consecutive frame
                         if (calledTimes == 1) {
                                 REQUIRE (int (canFrame.data[0]) == 0x21); // CONSECUTIVE FRAME, serial number 1
                                 REQUIRE (int (canFrame.data[1]) == 6);
@@ -160,7 +160,7 @@ TEST_CASE ("tx 4095B", "[send]")
                 [&calledTimes] (auto &&canFrame) {
                         if (calledTimes == 0) {
                                 REQUIRE (int (canFrame.dlc) == 8);
-                                REQUIRE (int (canFrame.data[0]) == 0x1f); // FISRT FRAME
+                                REQUIRE (int (canFrame.data[0]) == 0x1f); // FIRST FRAME
                                 REQUIRE (int (canFrame.data[1]) == 0xff); // 13B length
                                 REQUIRE (int (canFrame.data[2]) == 0);    // First byte
                                 REQUIRE (int (canFrame.data[3]) == 1);
@@ -304,7 +304,7 @@ TEST_CASE ("tx 4096B ETL", "[send]")
                 [&calledTimes] (auto const &canFrame) {
                         // 1. It should send a first frame
                         if (calledTimes == 0) {
-                                REQUIRE (int (canFrame.data[0]) == 0x10); // FISRT FRAME
+                                REQUIRE (int (canFrame.data[0]) == 0x10); // FIRST FRAME
                                 REQUIRE (int (canFrame.data[1]) == 13);   // 13B length
                                 REQUIRE (int (canFrame.data[2]) == 0);    // First byte
                                 REQUIRE (int (canFrame.data[3]) == 1);
@@ -316,7 +316,7 @@ TEST_CASE ("tx 4096B ETL", "[send]")
                                 return true;
                         }
 
-                        // 1. It should send a first frame
+                        // 2. It should send a consecutive frame
                         if (calledTimes == 1) {
                                 REQUIRE (int (canFrame.data[0]) == 0x21); // CONSECUTIVE FRAME, serial number 1
                                 REQUIRE (int (canFrame.data[1]) == 6);

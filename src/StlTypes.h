@@ -18,7 +18,7 @@ class CanFrame;
 
 /**
  * @brief The TimeProvider struct
- * TODO if I'm not mistaken, those classes ought to have 100µs resolutiuon instead of 1ms (1000µs).
+ * TODO if I'm not mistaken, those classes ought to have 100µs resolution instead of 1ms (1000µs).
  */
 struct ChronoTimeProvider {
         long operator() () const
@@ -35,7 +35,7 @@ struct CoutPrinter {
 };
 
 /**
- * Buffer for all input and ouptut operations
+ * Buffer for all input and output operations
  */
 using IsoMessage = std::vector<uint8_t>;
 

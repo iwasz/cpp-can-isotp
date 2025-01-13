@@ -16,10 +16,10 @@ static constexpr uint32_t MAX_29_ID = 0x1FFFFFFF;
 
 /**
  * This is the address class which represents ISO TP addresses. It lives in
- * slihtly higher level of abstraction than addresses describved in the ISO
+ * slightly higher level of abstraction than addresses described in the ISO
  * document (N_AI) as it use the same variables for all 7 address types (localAddress
  * and remoteAddress). This are "address encoders" which further convert this
- * "Address" to apropriate data inside Can Frames.
+ * "Address" to appropriate data inside Can Frames.
  */
 struct Address {
 
@@ -30,7 +30,7 @@ struct Address {
 
         /// N_TAtype Network Target Address Type
         enum class TargetAddressType : uint8_t {
-                PHYSICAL,  /// 1 to 1 communiaction supported for multiple and single frame communications
+                PHYSICAL,  /// 1 to 1 communication supported for multiple and single frame communications
                 FUNCTIONAL /// 1 to n communication (like broadcast?) is allowed only for single frame comms.
         };
 

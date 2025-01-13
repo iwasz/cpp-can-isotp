@@ -2,13 +2,13 @@
 This library implements [ISO 15765-2](https://en.wikipedia.org/wiki/ISO_15765-2) transport layer known also as CAN bus ISO TP or simply *Transport Protocol*. It was developed with microcontrollers in mind, but was also tested on a Linux box (although on a Linux system there is a [better option](https://github.com/hartkopp/can-isotp)). 
 
 ## Notes
-Whenever I refer to some cryptic paragraph numer in this document or in the source code I have **ISO 15765-2 First edition (2004-10-15)** on mind. This PDF id widely available in the Net though I'm not sure about lagality of this stuff, so I'm not including it in the repo. Normally an ISO document like that costs around $150.
+Whenever I refer to some cryptic paragraph numer in this document or in the source code I have **ISO 15765-2 First edition (2004-10-15)** on mind. This PDF id widely available in the Net though I'm not sure about legality of this stuff, so I'm not including it in the repo. Normally an ISO document like that costs around $150.
 
 This library is influenced by and was tested against [python-can-isotp](https://github.com/pylessard/python-can-isotp).
 
 # Using the library
 ## Building
-This library is header only, but you can build unit-tests and other simple examples, which can help you understand how to use the library in case of some trouble. This is a possible scenario of acheiving this:
+This library is header only, but you can build unit-tests and other simple examples, which can help you understand how to use the library in case of some trouble. This is a possible scenario of achieving this:
 
 ```sh
 git clone --recurse-submodules git@github.com:iwasz/cpp-can-isotp.git
@@ -42,7 +42,7 @@ Just
 ```
 
 ## Instantiating
-First you have to instantiate the ```TransportProtocol``` class which encapsulates the protocol state. TransportProtocol is a class template and can be customized depending on underlying CAN-bus implementation, memory constraints, error (exception) handling sheme and time related stuff. This makes the API of TransportProtocol a little bit verbose, but also enables one to use it on a *normal* computer (see ```socket-test``` for Linux example) as well as on microcontrollers which this library was meant for at the first place. 
+First you have to instantiate the ```TransportProtocol``` class which encapsulates the protocol state. TransportProtocol is a class template and can be customized depending on underlying CAN-bus implementation, memory constraints, error (exception) handling sheme and time related stuff. This makes the API of TransportProtocol a little bit verbose, but also enables one to use it on a *normal* computer (see ```socket-test``` for Linux example) as well as on microcontrollers which this library was meant for at the first place.
 
 ```cpp
 #include "LinuxCanFrame.h"
@@ -70,7 +70,7 @@ listenSocket (socketFd, [&tp] (auto const &frame) { tp.onCanNewFrame (frame); })
 The code you see above is more or less all that's needed for **receiving** ISO-TP messages. In (1) we somehow connect to the underlying CAN-bus subsystem and then, using ```socketFd``` we are able to send and receive raw CAN-frames (see examples). 
 
 ## Callbacks
-Callback is the second parameter to ```create``` function, and it can have 3 different forms. The simplest (called *simple* througout this document and the source code) is :
+Callback is the second parameter to ```create``` function, and it can have 3 different forms. The simplest (called *simple* througout this document and the source code) is:
 
 ```cpp
 void indication (tp::IsoMessage const &msg) { /* ... */ }
@@ -79,7 +79,7 @@ void indication (tp::IsoMessage const &msg) { /* ... */ }
 auto tp = tp::create<can_frame> (tp::Address{0x789ABC, 0x123456}, indication, socketSend);
 ```
 
-This one implements ```N_USData.indication``` (see par. 5.2.4)  and gets called whan new ISO message was successfulty assembled, or in case of an error to inform the user, that current ISO message could not be assembled fully. In the latter case, the ```msg``` argument will be empty, but no other further information on the error will be available. Of course name ```indication``` is used here as an example, and even a lambda can be used (in fact in unit tests lambdas are used almost exclusively).
+This one implements ```N_USData.indication``` (see par. 5.2.4)  and gets called whan new ISO message was successfully assembled, or in case of an error to inform the user, that current ISO message could not be assembled fully. In the latter case, the ```msg``` argument will be empty, but no other further information on the error will be available. Of course name ```indication``` is used here as an example, and even a lambda can be used (in fact in unit tests lambdas are used almost exclusively).
 
 The next one is called an *advanced* callback, because it has more parameters:
 
@@ -90,8 +90,8 @@ void indication (tp::Address const &a, tp::IsoMessage const &msg, tp::Result res
 Meaning of the parameters is :
 
 1. Address ```a``` is the address of a peer who sent the message. Depending on the addressing scheme ```a.getTxId ()``` or ```a.getTargetAddress ()``` will be of interest to the user. See paragraph on addresses.
-1. Message ```msg``` is the ISO message (in case of a success) or empty if there was an error.
-1. Result ```res``` will have value ```Result::N_OK``` in case of a success or something other if case of a failed transmission.
+2. Message ```msg``` is the ISO message (in case of a success) or empty if there was an error.
+3. Result ```res``` will have value ```Result::N_OK``` in case of a success or something other if case of a failed transmission.
 
 Lastly there is *advancedMethod* or *full* callback (again, those are the terms used in the unit tests and througout the comments in the source) which not only implements ```N_USData.indication``` but also ```N_USData.confirm``` and N_USData_FF.indication:
 
@@ -146,9 +146,9 @@ ISO messages can be moved, copied or passed by reference_wrapper (std::ref) if m
 - [x] It is possible to define a TP object without a default address and then use its send method also without an address. This way you are sending a message into oblivion. Have it sorted out.
 - [ ] Get rid of all warinigs and c-tidy issues.
 - [x] Check if separationTime and blockSize received from a peer is taken into account during sending (check both sides of communication BS is faulty for sure, no flow frame is sent other than first one).
-- [x] blockSize is hardcoede to 8 for testiung purposes. Revert to 0.
+- [x] blockSize is hardcoded to 8 for testing purposes. Revert to 0.
 - [ ] If errors occur during multi frame message receiving, the isoMessage should be removed (eventually. Probably some timeouts are mentioned in the ISO). Now it is not possible to receive second message if first has failed to be received entirely.
-- [x] Check if retyurn value from sendFrame is taken into account .
+- [x] Check if return value from sendFrame is taken into account.
 - [x] Implement all types of addressing.
 - [ ] Use some better means of unit testing. Test time dependent calls, maybe use some clever unit testing library like trompeleoleil for mocking.
 - [x] Test crosswise connected objects. They should be able to speak to each other.

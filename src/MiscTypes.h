@@ -15,19 +15,19 @@ namespace tp {
  * Codes signaled to the user via indication and confirmation callbacks.
  */
 enum class Result {
-        // standared result codes
+        // standard result codes
         N_OK,           /// Service execution performed successfully.
         N_TIMEOUT_A,    /// Timer N_Ar / N_As exceeded N_Asmax / N_Armax
         N_TIMEOUT_BS,   /// N_Bs time exceeded N_Bsmax
         N_TIMEOUT_CR,   /// N_Cr time exceeded N_Crmax
         N_WRONG_SN,     /// Unexpected sequence number in incoming consecutive frame
-        N_INVALID_FS,   /// Invalid FlowStatus value received in flow controll frame.
+        N_INVALID_FS,   /// Invalid FlowStatus value received in flow control frame.
         N_UNEXP_PDU,    /// Unexpected protocol data unit received.
-        N_WFT_OVRN,     /// This signals thge user that
-        N_BUFFER_OVFLW, /// When receiving flow controll with FlowStatus = OVFLW. Transmission is aborted.
+        N_WFT_OVRN,     /// This signals the user that we have received too many wait frames while awaiting a flow control frame.
+        N_BUFFER_OVFLW, /// When receiving flow control with FlowStatus = OVFLW. Transmission is aborted.
         N_ERROR,        /// General error.
         // implementation defined result codes
-        N_MESSAGE_NUM_MAX /// Not a standard error. This one means that there is too many different isoMessages beeing assembled from multiple
+        N_MESSAGE_NUM_MAX /// Not a standard error. This one means that there is too many different isoMessages being assembled from multiple
                           /// chunks of CAN frames now.
 
 };
