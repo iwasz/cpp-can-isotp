@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <etl/array.h>
+#include <etl/map.h>
+#include <etl/optional.h>
+
 /**
  * This file is for maintaining compatibility with systems where C++ standard library is
  * not available i.e. for Arduino. I was totally unaware, that there is no C++ standard
@@ -18,10 +22,6 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include <etl/array.h>
-#include <etl/map.h>
-#include <etl/optional.h>
 
 #if !defined Expects
 #define Expects(x) assert (x)
@@ -64,6 +64,3 @@ template <typename _Tp> auto declval () noexcept -> decltype (__declval<_Tp> (0)
 #include <cstdint>
 #include <gsl/gsl>
 #endif
-
-#include <etl/map.h>
-#include <etl/optional.h>
