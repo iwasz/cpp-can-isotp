@@ -495,7 +495,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (const Address &a, IsoMessageT const &msg)
 {
-        CanFrameWrapperType canFrame{0x00, true, int (IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f)};
+        CanFrameWrapperType canFrame{0x00, true, (int (IsoNPduType::SINGLE_FRAME) << 4) | (msg.size () & 0x0f)};
 
         if (!AddressEncoderT::toFrame (a, canFrame)) {
                 errorHandler (Status::ADDRESS_ENCODE_ERROR);
