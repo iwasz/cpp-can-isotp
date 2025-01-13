@@ -31,6 +31,7 @@ Run-time dependencies (libraries bundled with the code in deps directory as git 
 * C++17 (```if constexpr```).
 
 Unit tests
+* [Catch2](https://github.com/catchorg/Catch2)
 * [fmt](https://github.com/fmtlib/fmt)
 
 ## Using in your project
