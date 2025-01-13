@@ -14,6 +14,5 @@ ADD_EXECUTABLE(socket-test
     "main.cc"
 
     "../../deps/fmt/src/format.cc"
-    "../../deps/fmt/src/posix.cc"
 )
 
