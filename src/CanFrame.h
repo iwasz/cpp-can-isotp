@@ -66,9 +66,9 @@ public:
         void set (size_t i, uint8_t b) { gsl::at (frame.data, i) = b; }
 
 private:
-        // TODO this should be some kind of handler if we wantto call this class a "wrapper".
+        // TODO this should be some kind of handler if we want to call this class a "wrapper".
         // This way we would get rid of one copy during reception of a CAN frame.
-        // But at the other hand there must be a possibility to create new "wrappers" withgout
+        // But at the other hand there must be a possibility to create new "wrappers" without
         // providing the internal object when sending frames.
         CanFrame frame{};
 };

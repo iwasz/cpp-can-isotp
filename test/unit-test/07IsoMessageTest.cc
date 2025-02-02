@@ -7,7 +7,7 @@
  ****************************************************************************/
 
 #include "LinuxTransportProtocol.h"
-#include "catch.hpp"
+#include <catch2/catch.hpp>
 #include <etl/vector.h>
 
 using namespace tp;

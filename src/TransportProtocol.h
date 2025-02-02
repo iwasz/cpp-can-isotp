@@ -192,7 +192,7 @@ public:
         /**
          * This value will be sent in first flow control flow frame, and it tells the peer
          * how many consecutive frames to send in one burst. Then the receiver (the peer
-         * who calls setBlockSize) has to send a flow frame ackgnowledging received frames and
+         * who calls setBlockSize) has to send a flow frame acknowledging received frames and
          * and thus allowing for next batch of consecutive frames. Default 0 means that the
          * receiver wants all frames at once without any interruption. See 6.5.5.4.
          */
@@ -265,12 +265,12 @@ private:
                 int currentSn{};              /// Sequence number of Consecutive Frame.
                 int consecutiveFramesReceived{}; /// For comparison with block size.
                 Timer timer;                     /// For tracking time between first and consecutive frames with the same address.
-                Result timeoutReason{};          /// It fimer expired, what was the result.
+                Result timeoutReason{};          /// It timer expired, what was the result.
         };
 
         /*
          * StateMachine class implements an algorithm for sending a single ISO message, which
-         * can be up to 4095B longa and thus has to be divided into multiple CAN frames.
+         * can be up to 4095B long and thus has to be divided into multiple CAN frames.
          */
         class StateMachine {
         public:
@@ -495,7 +495,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::send (const Address
 
 template <typename TraitsT> bool TransportProtocol<TraitsT>::sendSingleFrame (const Address &a, IsoMessageT const &msg)
 {
-        CanFrameWrapperType canFrame{0x00, true, int (IsoNPduType::SINGLE_FRAME) | (msg.size () & 0x0f)};
+        CanFrameWrapperType canFrame{0x00, true, (int (IsoNPduType::SINGLE_FRAME) << 4) | (msg.size () & 0x0f)};
 
         if (!AddressEncoderT::toFrame (a, canFrame)) {
                 errorHandler (Status::ADDRESS_ENCODE_ERROR);
@@ -577,7 +577,7 @@ template <typename TraitsT> bool TransportProtocol<TraitsT>::onCanNewFrame (cons
                         return false;
                 }
 
-                // 6.5.3.3 Error situation : too much data. Should reply with apropriate flow control frame.
+                // 6.5.3.3 Error situation : too much data. Should reply with appropriate flow control frame.
                 if (multiFrameRemainingLen > MAX_ACCEPTED_ISO_MESSAGE_SIZE || multiFrameRemainingLen > MAX_ALLOWED_ISO_MESSAGE_SIZE) {
                         sendFlowFrame (outgoingAddress, FlowStatus::OVERFLOWED);
                         return false;
@@ -767,8 +767,8 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 state = State::DONE;
         }
 
-        IsoMessageT *message = &this->message;
-        uint16_t isoMessageSize = message->size ();
+        IsoMessageT const &message = this->message;
+        uint16_t isoMessageSize = message.size ();
         using Traits = AddressTraits<AddressEncoderT>;
 
         switch (state) {
@@ -788,7 +788,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 int toSend = std::min<int> (isoMessageSize, 6);
 
                 for (int i = 0; i < toSend; ++i) {
-                        canFrame.set (i + 2, message->at (i));
+                        canFrame.set (i + 2, message.at (i));
                 }
 
                 canFrame.setDlc (2 + toSend);
@@ -815,7 +815,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                         break;
                 }
 
-                // Address as received in the CAN frame frame.
+                // Address as received in the CAN frame.
                 auto theirAddress = AddressEncoderT::fromFrame (*frame);
 
                 if (!theirAddress || !AddressEncoderT::matches (*theirAddress, myAddress)) {
@@ -869,7 +869,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
                 }
 
                 waitFrameNumber = 0;
-                separationTimer.start (0); // Separation timer is started later with proper tomeout calculated here.
+                separationTimer.start (0); // Separation timer is started later with proper timeout calculated here.
                 state = State::SEND_CONSECUTIVE_FRAME;
                 bsCrTimer.start (N_CR_TIMEOUT);
         } break;
@@ -890,7 +890,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
                 int toSend = std::min<int> (isoMessageSize - bytesSent, 7);
                 for (int i = 0; i < toSend; ++i) {
-                        canFrame.set (i + 1, message->at (i + bytesSent));
+                        canFrame.set (i + 1, message.at (i + bytesSent));
                 }
 
                 canFrame.setDlc (1 + toSend);
@@ -903,7 +903,7 @@ template <typename TraitsT> Status TransportProtocol<TraitsT>::StateMachine::run
 
                 bytesSent += toSend;
 
-                if (bytesSent >= message->size ()) {
+                if (bytesSent >= message.size ()) {
                         state = State::DONE;
                         break;
                 }

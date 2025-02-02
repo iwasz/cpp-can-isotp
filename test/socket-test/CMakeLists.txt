@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 SET (CMAKE_VERBOSE_MAKEFILE OFF)
 
 SET (CMAKE_BUILD_TYPE Debug)
@@ -14,6 +14,5 @@ ADD_EXECUTABLE(socket-test
     "main.cc"
 
     "../../deps/fmt/src/format.cc"
-    "../../deps/fmt/src/posix.cc"
 )
 
